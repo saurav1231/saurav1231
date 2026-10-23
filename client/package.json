@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:demo": "vite build --mode demo --base ./ --outDir dist-demo"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

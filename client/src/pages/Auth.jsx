@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { IS_DEMO } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ErrorBox } from '../components/ui.jsx';
 
@@ -12,6 +13,7 @@ function useAfterAuth() {
 
 export function Login() {
   const { login } = useAuth();
+  const { search } = useLocation();
   const done = useAfterAuth();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState(null);
@@ -31,13 +33,19 @@ export function Login() {
       <label>Password<input type="password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>
       <ErrorBox error={error} />
       <button className="btn btn-block">Sign in</button>
-      <p className="center muted">New to Ayana? <Link to={`/register${location.search}`}>Create an account</Link></p>
+      {IS_DEMO && (
+        <button type="button" className="btn btn-ghost btn-block" onClick={() => setForm({ email: 'admin@ayana.travel', password: 'Admin@12345' })}>
+          Fill in the demo admin login
+        </button>
+      )}
+      <p className="center muted">New to Ayana? <Link to={`/register${search}`}>Create an account</Link></p>
     </form>
   );
 }
 
 export function Register() {
   const { register } = useAuth();
+  const { search } = useLocation();
   const done = useAfterAuth();
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
   const [error, setError] = useState(null);
@@ -60,7 +68,7 @@ export function Register() {
       <label>Password (8+ characters)<input type="password" minLength={8} required value={form.password} onChange={set('password')} /></label>
       <ErrorBox error={error} />
       <button className="btn btn-block">Create account</button>
-      <p className="center muted">Already have an account? <Link to={`/login${location.search}`}>Sign in</Link></p>
+      <p className="center muted">Already have an account? <Link to={`/login${search}`}>Sign in</Link></p>
     </form>
   );
 }

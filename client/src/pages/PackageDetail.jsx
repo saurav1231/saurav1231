@@ -21,7 +21,6 @@ function BookingPanel({ pkg }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!user) return navigate(`/login?next=/packages/${pkg.slug}`);
     setBusy(true);
     setError(null);
     try {
@@ -77,9 +76,15 @@ function BookingPanel({ pkg }) {
         <strong>{formatPrice(total, pkg.currency)}</strong>
       </div>
       <ErrorBox error={error} />
-      <button className="btn btn-block" disabled={busy || !departure?.seatsLeft}>
-        {busy ? 'Reserving...' : user ? 'Reserve & pay' : 'Sign in to book'}
-      </button>
+      {user ? (
+        <button className="btn btn-block" disabled={busy || !departure?.seatsLeft}>
+          {busy ? 'Reserving...' : 'Reserve & pay'}
+        </button>
+      ) : (
+        <button type="button" className="btn btn-block" onClick={() => navigate(`/login?next=/packages/${pkg.slug}`)}>
+          Sign in to book
+        </button>
+      )}
       <p className="small muted center">Seats are held for 30 minutes while you pay.</p>
     </form>
   );

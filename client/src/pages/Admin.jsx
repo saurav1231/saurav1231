@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, formatDate, formatPrice } from '../api.js';
 import { useApi } from '../useApi.js';
-import { ErrorBox, Spinner, StatusPill } from '../components/ui.jsx';
+import { ConfirmButton, ErrorBox, Spinner, StatusPill } from '../components/ui.jsx';
 
 function Overview() {
   const { data, loading } = useApi('/admin/stats');
@@ -186,7 +186,7 @@ function Packages() {
             <div className="row">
               <button className="link" onClick={() => setEditing(toForm(p))}>Edit</button>
               {p.isActive && (
-                <button className="link danger" onClick={async () => { if (confirm('Hide this package?')) { await api(`/admin/packages/${p.id}`, { method: 'DELETE' }); reload(); } }}>Hide</button>
+                <ConfirmButton confirmText="Confirm hide" onConfirm={async () => { await api(`/admin/packages/${p.id}`, { method: 'DELETE' }); reload(); }}>Hide</ConfirmButton>
               )}
             </div>
           </div>

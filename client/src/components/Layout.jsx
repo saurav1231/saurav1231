@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { IS_DEMO } from '../api.js';
 
 export function Navbar() {
   const { user, logout } = useAuth();
@@ -54,9 +55,26 @@ export function Footer() {
   );
 }
 
+function DemoBanner() {
+  const reset = async () => {
+    const { resetDemo } = await import('../demo/demoBackend.js');
+    resetDemo();
+    window.location.reload();
+  };
+  return (
+    <div className="demo-banner">
+      <span>
+        <strong>Preview</strong> · Payments are simulated and your data stays in this browser. Admin login: admin@ayana.travel / Admin@12345
+      </span>
+      <button className="link" onClick={reset}>Reset demo</button>
+    </div>
+  );
+}
+
 export default function Layout() {
   return (
     <>
+      {IS_DEMO && <DemoBanner />}
       <Navbar />
       <main>
         <Outlet />

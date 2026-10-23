@@ -83,3 +83,8 @@ See **[docs/05-hostinger-deployment.md](docs/05-hostinger-deployment.md)**. Shor
 bash deploy/setup-vps.sh yourdomain.com you@email.com   # once, as root
 bash deploy/deploy.sh                                     # every release
 ```
+
+## 👀 Preview without a server
+`cd client && npm run build:demo` builds `client/dist-demo/`, a standalone preview where the API is
+simulated in the browser (`src/demo/`). Payments are fake and data stays in the browser's storage.
+Use it to show the design to others; it is not the real app.

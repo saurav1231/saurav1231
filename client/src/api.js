@@ -1,14 +1,42 @@
 // Tiny fetch wrapper for the Ayana API.
 const BASE = import.meta.env.VITE_API_URL || '/api';
 const TOKEN_KEY = 'ayana_token';
+// Demo build: the API is simulated in the browser (see src/demo/demoBackend.js).
+export const IS_DEMO = import.meta.env.VITE_DEMO === 'true';
 
+let memoryToken = null;
 export const tokenStore = {
-  get: () => localStorage.getItem(TOKEN_KEY),
-  set: (t) => localStorage.setItem(TOKEN_KEY, t),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
+  get: () => {
+    try {
+      return localStorage.getItem(TOKEN_KEY);
+    } catch {
+      return memoryToken;
+    }
+  },
+  set: (t) => {
+    memoryToken = t;
+    try {
+      localStorage.setItem(TOKEN_KEY, t);
+    } catch {
+      /* storage blocked */
+    }
+  },
+  clear: () => {
+    memoryToken = null;
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+    } catch {
+      /* storage blocked */
+    }
+  },
 };
 
 export async function api(path, { method = 'GET', body, query } = {}) {
+  if (IS_DEMO) {
+    const { demoRequest } = await import('./demo/demoBackend.js');
+    const cleanQuery = Object.fromEntries(Object.entries(query || {}).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+    return demoRequest(method, path, { body, query: cleanQuery, token: tokenStore.get() });
+  }
   const url = new URL(BASE + path, window.location.origin);
   if (query) {
     Object.entries(query).forEach(([k, v]) => {

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatPrice } from '../api.js';
 
@@ -78,6 +78,25 @@ export function PackageCard({ pkg }) {
         </div>
       </div>
     </Link>
+  );
+}
+
+// Asks for a second click instead of a browser confirm() popup.
+export function ConfirmButton({ children, confirmText = 'Tap again to confirm', onConfirm, className = 'link' }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return (
+    <button
+      type="button"
+      className={`${className} ${armed ? 'danger' : ''}`}
+      onClick={() => (armed ? (setArmed(false), onConfirm()) : setArmed(true))}
+    >
+      {armed ? confirmText : children}
+    </button>
   );
 }
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, formatDate, formatPrice } from '../api.js';
 import { useApi } from '../useApi.js';
-import { ErrorBox, Spinner, StatusPill } from '../components/ui.jsx';
+import { ConfirmButton, ErrorBox, Spinner, StatusPill } from '../components/ui.jsx';
 
 function ReviewForm({ slug }) {
   const [open, setOpen] = useState(false);
@@ -37,7 +37,6 @@ function ReviewForm({ slug }) {
 export default function MyBookings() {
   const { data, error, loading, reload } = useApi('/bookings/me');
   const cancel = async (id) => {
-    if (!confirm('Cancel this unpaid booking?')) return;
     await api(`/bookings/${id}/cancel`, { method: 'POST' });
     reload();
   };
@@ -65,7 +64,7 @@ export default function MyBookings() {
               {b.status === 'PENDING' && (
                 <>
                   <Link className="btn btn-small" to={`/checkout/${b.id}`}>Pay now</Link>
-                  <button className="link" onClick={() => cancel(b.id)}>Cancel</button>
+                  <ConfirmButton confirmText="Confirm cancel" onConfirm={() => cancel(b.id)}>Cancel</ConfirmButton>
                 </>
               )}
               {b.status === 'CONFIRMED' && <ReviewForm slug={b.package.slug} />}

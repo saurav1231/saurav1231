@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Layout from './components/Layout.jsx';
 import { Spinner } from './components/ui.jsx';
 import { useAuth } from './context/AuthContext.jsx';
@@ -12,8 +12,9 @@ import Admin from './pages/Admin.jsx';
 
 function Protected({ children, admin }) {
   const { user, loading } = useAuth();
+  const { pathname } = useLocation();
   if (loading) return <Spinner />;
-  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />;
+  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(pathname)}`} replace />;
   if (admin && user.role !== 'ADMIN') return <Navigate to="/" replace />;
   return children;
 }
