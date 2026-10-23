@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, formatDate, formatPrice } from '../api.js';
+import { api, formatDate, formatPrice, mediaUrl } from '../api.js';
 import { useApi } from '../useApi.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { Cover, ErrorBox, Spinner, Stars } from '../components/ui.jsx';
@@ -90,6 +90,32 @@ function BookingPanel({ pkg }) {
   );
 }
 
+function Gallery({ images, title }) {
+  const [open, setOpen] = useState(null); // index of the photo shown full screen
+  if (images.length < 2) return null;
+  const show = (i) => setOpen((i + images.length) % images.length);
+  return (
+    <section>
+      <h2>Photos</h2>
+      <div className="gallery">
+        {images.map((img, i) => (
+          <button key={img.id} onClick={() => setOpen(i)} aria-label={`Open photo ${i + 1}`}>
+            <img src={mediaUrl(img.thumbUrl)} alt={img.alt || title} loading="lazy" />
+          </button>
+        ))}
+      </div>
+      {open !== null && (
+        <div className="lightbox" role="dialog" aria-label="Photo viewer" onClick={() => setOpen(null)}>
+          <img src={mediaUrl(images[open].url)} alt={images[open].alt || title} onClick={(e) => e.stopPropagation()} />
+          <button className="lb-prev" onClick={(e) => { e.stopPropagation(); show(open - 1); }} aria-label="Previous photo">‹</button>
+          <button className="lb-next" onClick={(e) => { e.stopPropagation(); show(open + 1); }} aria-label="Next photo">›</button>
+          <button className="lb-close" onClick={() => setOpen(null)} aria-label="Close">×</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function PackageDetail() {
   const { slug } = useParams();
   const { data, error, loading } = useApi(`/packages/${slug}`);
@@ -100,7 +126,7 @@ export default function PackageDetail() {
   return (
     <div className="page detail">
       <div className="detail-hero">
-        <Cover pkg={pkg} className="cover-large" />
+        <Cover pkg={pkg} className="cover-large" large />
         <div>
           <span className="chip">{pkg.category}</span>
           <h1>{pkg.title}</h1>
@@ -120,6 +146,8 @@ export default function PackageDetail() {
               {pkg.highlights.map((h) => <li key={h}>{h}</li>)}
             </ul>
           </section>
+
+          <Gallery images={pkg.images || []} title={pkg.title} />
 
           <section>
             <h2>Day by day</h2>

@@ -16,7 +16,8 @@
     "db:seed": "node prisma/seed.js",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "db:setup": "prisma migrate deploy && node prisma/seed.js"
+    "db:setup": "prisma migrate deploy && node prisma/seed.js",
+    "db:sample": "node prisma/sample-bookings.js"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
@@ -28,7 +29,9 @@
     "helmet": "8.1.0",
     "jsonwebtoken": "9.0.2",
     "morgan": "1.10.1",
+    "multer": "2.0.2",
     "razorpay": "2.9.6",
+    "sharp": "0.34.4",
     "zod": "3.25.76"
   },
   "devDependencies": {

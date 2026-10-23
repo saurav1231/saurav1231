@@ -60,6 +60,31 @@ export async function api(path, { method = 'GET', body, query } = {}) {
   return data;
 }
 
+// Uploads photo files (multipart/form-data). `files` is a FileList or array of File.
+export async function apiUpload(path, files) {
+  if (IS_DEMO) {
+    const { demoRequest } = await import('./demo/demoBackend.js');
+    return demoRequest('POST', path, { body: { files: [...files] }, token: tokenStore.get() });
+  }
+  const form = new FormData();
+  [...files].forEach((f) => form.append('images', f));
+  const headers = {};
+  const token = tokenStore.get();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(new URL(BASE + path, window.location.origin), { method: 'POST', headers, body: form });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
+  return data;
+}
+
+// Photos uploaded to the API are stored as "/uploads/...". When the API is on another domain,
+// prefix them with that domain.
+export function mediaUrl(u) {
+  if (!u || /^(https?:|data:|blob:)/.test(u)) return u;
+  const api = import.meta.env.VITE_API_URL;
+  return api ? new URL(u, api).toString() : u;
+}
+
 export const formatPrice = (paise, currency = 'INR') =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(paise / 100);
 

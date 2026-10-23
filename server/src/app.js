@@ -27,6 +27,10 @@ export function createApp() {
   app.use(express.json({ limit: '1mb' }));
   app.use('/api/auth', rateLimit({ windowMs: 15 * 60_000, limit: 50 }));
 
+  // Uploaded package photos (on the VPS Nginx serves this folder directly, see deploy/nginx.conf)
+  app.use('/uploads', express.static(config.uploadDir, { maxAge: '30d' }));
+  app.use('/uploads', (_req, res) => res.status(404).end());
+
   app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
   app.use('/api/auth', authRoutes);
   app.use('/api', catalogRoutes);

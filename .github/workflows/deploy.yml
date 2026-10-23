@@ -1,0 +1,50 @@
+# Every push to the main branch: check that everything builds, then log in to the
+# Hostinger VPS over SSH and run deploy/deploy.sh.
+# One-time setup (GitHub repo → Settings → Secrets and variables → Actions):
+#   VPS_HOST     your VPS IP address
+#   VPS_USER     ayana
+#   VPS_SSH_KEY  private key whose public half is in /home/ayana/.ssh/authorized_keys
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # also allows a manual "Run workflow" button
+
+concurrency: deploy-production
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: API installs and Prisma schema is valid
+        working-directory: server
+        run: npm ci && npx prisma validate
+        env:
+          DATABASE_URL: mysql://user:pass@localhost:3306/db
+      - name: Website builds
+        working-directory: client
+        run: npm ci && npm run build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the server secrets are set
+        id: check
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          if [ -n "$HOST" ]; then echo "ready=yes" >> "$GITHUB_OUTPUT"; else echo "VPS_HOST secret not set yet, skipping deploy"; fi
+      - name: Run deploy script on the VPS
+        if: steps.check.outputs.ready == 'yes'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: cd /var/www/ayana && bash deploy/deploy.sh

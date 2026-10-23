@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { api, formatDate, formatPrice } from '../api.js';
+import { api, apiUpload, formatDate, formatPrice, mediaUrl } from '../api.js';
 import { useApi } from '../useApi.js';
+import AdminAnalytics from './AdminAnalytics.jsx';
 import { ConfirmButton, ErrorBox, Spinner, StatusPill } from '../components/ui.jsx';
 
 function Overview() {
@@ -150,10 +151,77 @@ function DepartureForm({ pkg, onSaved }) {
   );
 }
 
+// Upload, reorder and delete photos of one package. The first photo is the cover.
+function PhotoManager({ pkg, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const images = pkg.images || [];
+
+  const upload = async (e) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiUpload(`/admin/packages/${pkg.id}/images`, files);
+      onChange();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+      e.target.value = '';
+    }
+  };
+  const move = async (i, dir) => {
+    const ids = images.map((x) => x.id);
+    const j = i + dir;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    await api(`/admin/packages/${pkg.id}/images/order`, { method: 'PUT', body: { ids } });
+    onChange();
+  };
+  const makeCover = async (i) => {
+    const ids = images.map((x) => x.id);
+    ids.unshift(ids.splice(i, 1)[0]);
+    await api(`/admin/packages/${pkg.id}/images/order`, { method: 'PUT', body: { ids } });
+    onChange();
+  };
+  const remove = async (id) => {
+    await api(`/admin/images/${id}`, { method: 'DELETE' });
+    onChange();
+  };
+
+  return (
+    <div className="photos">
+      <div className="photo-grid">
+        {images.map((img, i) => (
+          <figure key={img.id} className={i === 0 ? 'is-cover' : ''}>
+            <img src={mediaUrl(img.thumbUrl)} alt={img.alt} />
+            {i === 0 && <span className="badge">Cover</span>}
+            <figcaption>
+              <button className="link" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move left">←</button>
+              {i > 0 && <button className="link" onClick={() => makeCover(i)}>Make cover</button>}
+              <button className="link" onClick={() => move(i, 1)} disabled={i === images.length - 1} aria-label="Move right">→</button>
+              <ConfirmButton confirmText="Delete?" onConfirm={() => remove(img.id)}>Delete</ConfirmButton>
+            </figcaption>
+          </figure>
+        ))}
+        <label className="photo-add">
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple onChange={upload} disabled={busy} />
+          <span>{busy ? 'Uploading...' : '+ Add photos'}</span>
+          <small>JPG, PNG or WEBP · up to 15 MB each</small>
+        </label>
+      </div>
+      <ErrorBox error={error} />
+    </div>
+  );
+}
+
 function Packages() {
   const { data, loading, reload } = useApi('/admin/packages');
   const { data: dests } = useApi('/destinations');
   const [editing, setEditing] = useState(null);
+  const [photosFor, setPhotosFor] = useState(null);
 
   if (loading) return <Spinner />;
   if (editing) {
@@ -184,6 +252,9 @@ function Packages() {
               <p className="muted small">{p.destination.name} · {p.category} · {p.durationDays} days · {formatPrice(p.pricePerPerson)}</p>
             </div>
             <div className="row">
+              <button className="link" onClick={() => setPhotosFor(photosFor === p.id ? null : p.id)}>
+                Photos ({p.images?.length || 0})
+              </button>
               <button className="link" onClick={() => setEditing(toForm(p))}>Edit</button>
               {p.isActive && (
                 <ConfirmButton confirmText="Confirm hide" onConfirm={async () => { await api(`/admin/packages/${p.id}`, { method: 'DELETE' }); reload(); }}>Hide</ConfirmButton>
@@ -195,6 +266,7 @@ function Packages() {
               <span key={d.id} className="chip">{formatDate(d.startDate)} · {d.seatsBooked}/{d.seatsTotal}</span>
             ))}
           </div>
+          {photosFor === p.id && <PhotoManager pkg={p} onChange={reload} />}
           <DepartureForm pkg={p} onSaved={reload} />
         </div>
       ))}
@@ -208,11 +280,12 @@ export default function Admin() {
     <div className="page">
       <h1>Admin</h1>
       <div className="tabs">
-        {['overview', 'bookings', 'packages'].map((t) => (
+        {['overview', 'analytics', 'bookings', 'packages'].map((t) => (
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>
         ))}
       </div>
       {tab === 'overview' && <Overview />}
+      {tab === 'analytics' && <AdminAnalytics />}
       {tab === 'bookings' && <Bookings />}
       {tab === 'packages' && <Packages />}
     </div>

@@ -1,4 +1,8 @@
 import 'dotenv/config';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const serverRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function required(name) {
   const value = process.env[name];
@@ -17,6 +21,8 @@ export const config = {
   jwtSecret: required('JWT_SECRET'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   bookingHoldMinutes: Number(process.env.BOOKING_HOLD_MINUTES || 30),
+  // Uploaded photos are saved here and served at /uploads/...
+  uploadDir: path.resolve(serverRoot, process.env.UPLOAD_DIR || 'uploads'),
   payment: {
     mode: paymentMode, // 'mock' | 'razorpay'
     razorpayKeyId: process.env.RAZORPAY_KEY_ID || '',

@@ -10,6 +10,10 @@ export function errorHandler(err, req, res, _next) {
   if (err instanceof HttpError) {
     return res.status(err.status).json({ error: err.message, details: err.details });
   }
+  if (err.name === 'MulterError') {
+    const msg = err.code === 'LIMIT_FILE_SIZE' ? 'Each photo must be under 15 MB' : err.message;
+    return res.status(400).json({ error: msg });
+  }
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
     return res.status(409).json({ error: 'Already exists', details: err.meta });
   }

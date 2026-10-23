@@ -19,7 +19,12 @@ const createSchema = z.object({
 });
 
 const bookingInclude = {
-  package: { select: { title: true, slug: true, durationDays: true, imageUrl: true, category: true } },
+  package: {
+    select: {
+      title: true, slug: true, durationDays: true, imageUrl: true, category: true,
+      images: { orderBy: { sortOrder: 'asc' }, take: 1, select: { thumbUrl: true } },
+    },
+  },
   departure: { select: { startDate: true } },
   payments: { select: { id: true, status: true, amount: true, providerPaymentId: true, createdAt: true } },
 };

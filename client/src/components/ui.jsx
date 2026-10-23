@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { formatPrice } from '../api.js';
+import { formatPrice, mediaUrl } from '../api.js';
 
 export const Spinner = () => <div className="spinner" aria-label="Loading" />;
 
@@ -22,9 +22,12 @@ function hash(s) {
   return Math.abs(h);
 }
 
-export function Cover({ pkg, className = '' }) {
-  if (pkg.imageUrl) {
-    return <img className={`cover ${className}`} src={pkg.imageUrl} alt={pkg.title} loading="lazy" />;
+// Cover photo: first uploaded photo, else the image URL typed in admin, else gradient artwork.
+export function Cover({ pkg, className = '', large = false }) {
+  const first = pkg.images?.[0];
+  const src = first ? (large ? first.url : first.thumbUrl) : pkg.imageUrl;
+  if (src) {
+    return <img className={`cover ${className}`} src={mediaUrl(src)} alt={first?.alt || pkg.title} loading="lazy" />;
   }
   const [a, b] = PALETTES[hash(pkg.slug) % PALETTES.length];
   return (

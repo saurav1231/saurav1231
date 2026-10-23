@@ -27,7 +27,11 @@ export default function Packages() {
 
   return (
     <div className="page">
-      <h1>Find your journey</h1>
+      <h1>
+        {query.destination && dests
+          ? `Journeys to ${dests.destinations.find((d) => d.slug === query.destination)?.name || 'this dham'}`
+          : 'Find your journey'}
+      </h1>
       <div className="listing">
         <aside className="filters">
           <label>

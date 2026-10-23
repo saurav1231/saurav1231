@@ -1,10 +1,11 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApi } from '../useApi.js';
 import { PackageCard, Spinner } from '../components/ui.jsx';
+import { DHAMS } from '../three/dham/dhams.js';
 
 // three.js is heavy, so the 3D scene loads in its own chunk.
-const HeroScene = lazy(() => import('../three/HeroScene.jsx'));
+const DhamScene = lazy(() => import('../three/dham/DhamScene.jsx'));
 
 const CATEGORY_TEXT = {
   Pilgrimage: 'Sacred temples and darshan, handled end to end',
@@ -15,12 +16,47 @@ const CATEGORY_TEXT = {
   Trek: 'High-altitude yatras with full support',
 };
 
-export default function Home() {
+// Phones and tablets without a mouse get the one-temple-at-a-time view.
+function useCompact() {
+  const query = '(max-width: 760px), (hover: none)';
+  const [compact, setCompact] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setCompact(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return compact;
+}
+
+function DhamHero() {
   const navigate = useNavigate();
+  const compact = useCompact();
   const [search, setSearch] = useState('');
+  const [hovered, setHovered] = useState(null);
+  const [picked, setPicked] = useState(DHAMS[0].slug); // phone view always shows one dham
+  const [entering, setEntering] = useState(null);
   const { data: destData } = useApi('/destinations');
-  const { data: featured, loading } = useApi('/packages', { featured: 'true', limit: 6 });
-  const { data: catData } = useApi('/categories');
+
+  const counts = useMemo(
+    () => Object.fromEntries((destData?.destinations || []).map((d) => [d.slug, d.packageCount])),
+    [destData],
+  );
+  const focused = compact ? picked : hovered;
+  const active = DHAMS.find((d) => d.slug === (entering || focused));
+
+  const focus = (slug) => (compact ? setPicked(slug) : setHovered(slug));
+  const step = (dir) => {
+    const i = DHAMS.findIndex((d) => d.slug === picked);
+    setPicked(DHAMS[(i + dir + DHAMS.length) % DHAMS.length].slug);
+  };
+  const enter = (slug) => {
+    if (entering) return;
+    const go = () => navigate(`/packages?destination=${slug}`);
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return go();
+    setEntering(slug);
+    setTimeout(go, 1300);
+  };
 
   const goSearch = (e) => {
     e.preventDefault();
@@ -28,39 +64,82 @@ export default function Home() {
   };
 
   return (
+    <section className={`hero ${compact ? 'compact' : ''}`}>
+      <div className="hero-canvas">
+        <Suspense fallback={<div className="hero-fallback" />}>
+          <DhamScene
+            focused={focused}
+            entering={entering}
+            compact={compact}
+            onFocus={focus}
+            onBlur={() => setHovered(null)}
+            onEnter={enter}
+          />
+        </Suspense>
+      </div>
+
+      <div className="hero-copy">
+        <p className="eyebrow">अयन · the journey</p>
+        <h1>
+          Travel outward. <em>Arrive within.</em>
+        </h1>
+        <form className="search" onSubmit={goSearch}>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search Kedarnath, Rishikesh, yoga..."
+            aria-label="Search journeys"
+          />
+          <button className="btn">Find my journey</button>
+        </form>
+        {!compact && <p className="hint">Move your mouse over a temple to walk up to its door. Click to step inside.</p>}
+      </div>
+
+      <div className="dham-bar">
+        {active && (
+          <div className="dham-card" key={active.slug}>
+            <span className="eyebrow">{active.region}</span>
+            <h2>{active.name}</h2>
+            <p>{active.line}</p>
+            <button className="btn" onClick={() => enter(active.slug)}>
+              Enter{compact ? "" : " the dham"}{counts[active.slug] ? ` · ${counts[active.slug]} ${counts[active.slug] === 1 ? 'journey' : 'journeys'}` : ''}
+            </button>
+          </div>
+        )}
+        <div className="dham-picker" role="group" aria-label="Choose a dham">
+          {compact && (
+            <button className="dham-arrow" onClick={() => step(-1)} aria-label="Previous dham">‹</button>
+          )}
+          {DHAMS.map((d) => (
+            <button
+              key={d.slug}
+              className={`dham-chip ${focused === d.slug ? 'on' : ''}`}
+              onMouseEnter={() => !compact && setHovered(d.slug)}
+              onMouseLeave={() => !compact && setHovered(null)}
+              onFocus={() => focus(d.slug)}
+              onClick={() => (compact && picked !== d.slug ? setPicked(d.slug) : enter(d.slug))}
+            >
+              {d.name}
+            </button>
+          ))}
+          {compact && (
+            <button className="dham-arrow" onClick={() => step(1)} aria-label="Next dham">›</button>
+          )}
+        </div>
+      </div>
+
+      <div className={`enter-flash ${entering ? 'on' : ''}`} aria-hidden="true" />
+    </section>
+  );
+}
+
+export default function Home() {
+  const { data: featured, loading } = useApi('/packages', { featured: 'true', limit: 6 });
+  const { data: catData } = useApi('/categories');
+
+  return (
     <>
-      <section className="hero">
-        <div className="hero-canvas">
-          <Suspense fallback={null}>
-            <HeroScene
-              destinations={destData?.destinations || []}
-              onSelect={(d) => navigate(`/packages?destination=${d.slug}`)}
-            />
-          </Suspense>
-        </div>
-        <div className="hero-copy">
-          <p className="eyebrow">अयन · the journey</p>
-          <h1>
-            Travel outward.
-            <br />
-            <em>Arrive within.</em>
-          </h1>
-          <p className="lead">
-            Handpicked pilgrimages, yoga retreats and meditation journeys across India and the Himalaya. Choose your
-            path, book in minutes, pay securely.
-          </p>
-          <form className="search" onSubmit={goSearch}>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search Kedarnath, Rishikesh, yoga..."
-              aria-label="Search journeys"
-            />
-            <button className="btn">Find my journey</button>
-          </form>
-          <p className="hint">Tip: drag the globe and click a glowing point to see journeys there.</p>
-        </div>
-      </section>
+      <DhamHero />
 
       <section className="section">
         <div className="section-head">

@@ -15,5 +15,9 @@ DB_HOST=${HOSTPORT%%:*}; DB_PORT=${HOSTPORT#*:}; [ "$DB_PORT" = "$HOSTPORT" ] &&
 
 FILE="$DIR/ayana-$(date +%F-%H%M).sql.gz"
 MYSQL_PWD="$DB_PASS" mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" --single-transaction --routines "$DB_NAME" | gzip > "$FILE"
-find "$DIR" -name 'ayana-*.sql.gz' -mtime +14 -delete
+# Uploaded photos live on disk, not in the database, so back them up too.
+if [ -d server/uploads ]; then
+  tar czf "$DIR/ayana-uploads-$(date +%F-%H%M).tgz" -C server uploads
+fi
+find "$DIR" \( -name 'ayana-*.sql.gz' -o -name 'ayana-uploads-*.tgz' \) -mtime +14 -delete
 echo "$(date) backup written: $FILE"

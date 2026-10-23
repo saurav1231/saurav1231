@@ -81,6 +81,7 @@ router.get('/packages', async (req, res) => {
         id: true, slug: true, title: true, summary: true, category: true, durationDays: true,
         pricePerPerson: true, currency: true, imageUrl: true, isFeatured: true,
         ratingAvg: true, ratingCount: true,
+        images: { orderBy: { sortOrder: 'asc' }, take: 1, select: { url: true, thumbUrl: true, alt: true } },
         destination: { select: { name: true, slug: true, state: true, latitude: true, longitude: true } },
       },
     }),
@@ -94,6 +95,7 @@ router.get('/packages/:slug', async (req, res) => {
     include: {
       destination: true,
       itinerary: { orderBy: { dayNumber: 'asc' } },
+      images: { orderBy: { sortOrder: 'asc' }, select: { id: true, url: true, thumbUrl: true, alt: true } },
       departures: { where: { isActive: true, startDate: { gte: new Date() } }, orderBy: { startDate: 'asc' } },
       reviews: {
         orderBy: { createdAt: 'desc' },

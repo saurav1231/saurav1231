@@ -80,6 +80,7 @@ model Package {
   ratingCount    Int            @default(0)
   destinationId  String
   destination    Destination    @relation(fields: [destinationId], references: [id])
+  images         PackageImage[]
   itinerary      ItineraryDay[]
   departures     Departure[]
   bookings       Booking[]
@@ -90,6 +91,20 @@ model Package {
   @@index([category])
   @@index([destinationId])
   @@index([isActive, isFeatured])
+}
+
+// Photos uploaded from the admin panel. The one with the lowest sortOrder is the cover.
+model PackageImage {
+  id        String   @id @default(cuid())
+  packageId String
+  package   Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  url       String   @db.VarChar(500) // large version, max 1600px wide (webp)
+  thumbUrl  String   @db.VarChar(500) // small version for cards, 640px wide
+  alt       String   @default("") @db.VarChar(200)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([packageId, sortOrder])
 }
 
 model ItineraryDay {
