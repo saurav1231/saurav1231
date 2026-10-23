@@ -15,7 +15,7 @@ Amounts are in **paise** (₹1 = 100).
 ## Catalog (public)
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/destinations` | All destinations with `packageCount` (used by the 3D globe) |
+| GET | `/destinations` | All destinations with `packageCount` (used by the dham chips on the home page) |
 | GET | `/categories` | `[{ name, count }]` |
 | GET | `/packages` | Query: `search, category, destination (slug), minPrice, maxPrice (₹), maxDays, featured=true, sort=popular\|price_asc\|price_desc\|duration\|newest, page, limit` → `{ packages, page, total, totalPages }` |
 | GET | `/packages/:slug` | Package + destination + itinerary + upcoming departures (`seatsLeft`, `price`) + reviews |
@@ -49,6 +49,14 @@ Amounts are in **paise** (₹1 = 100).
 | PATCH | `/admin/departures/:id` | Any of the above + `isActive` |
 | POST | `/admin/destinations` | `{ slug, name, state?, description, latitude, longitude }` |
 | GET | `/admin/bookings?status=CONFIRMED` | Latest 200 bookings with customer and payment info |
+| GET | `/admin/analytics?months=12` | Summary numbers, revenue by month, top packages, by destination/category, booking outcomes, seats filled next 60 days |
+| GET | `/admin/export/bookings.csv` | All bookings as CSV (Excel) |
+| POST | `/admin/packages/:id/images` | `multipart/form-data`, field `images` (up to 12 files, 15 MB each, JPG/PNG/WEBP/AVIF) → resized to WEBP |
+| PUT | `/admin/packages/:id/images/order` | `{ ids: [...] }` new order; first = cover |
+| PATCH | `/admin/images/:id` | `{ alt }` |
+| DELETE | `/admin/images/:id` | Removes the photo and its files |
+
+Photos are served at `/uploads/packages/<packageId>/<name>.webp` (and `-thumb.webp`).
 
 ## Example: full flow with curl
 

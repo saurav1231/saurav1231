@@ -5,7 +5,7 @@
 | Layer | Choice | Why |
 |---|---|---|
 | Frontend | **React 19 + Vite** | Fast dev server, small production build, huge ecosystem |
-| 3D | **three.js + React Three Fiber + drei** | Declarative 3D in React: the globe, halo rings, stars and particles |
+| 3D | **three.js + React Three Fiber + drei** | Declarative 3D in React: the five dhams, dusk sky, mountains, diyas and the camera fly-through |
 | Routing | React Router 7 | Client-side pages |
 | Styling | Plain CSS with variables | No build plugins to learn; easy to edit in Cursor |
 | Backend | **Node.js 20+ / Express 5** | Same language as frontend, simple REST |
@@ -23,7 +23,7 @@
 ```mermaid
 flowchart LR
   subgraph Client["Customer browser / phone"]
-    UI["React SPA<br/>3D globe (three.js)"]
+    UI["React SPA<br/>3D dhams (three.js)"]
     RZP["Razorpay Checkout<br/>(popup)"]
   end
 
@@ -112,8 +112,11 @@ If a late payment arrives and the seats are gone, the payment is marked `REFUND_
 │       ├── useApi.js            data-loading hook
 │       ├── context/AuthContext.jsx
 │       ├── three/
-│       │   ├── HeroScene.jsx    3D globe, markers, halo, stars (lazy loaded)
-│       │   └── geo.js           lat/lng -> 3D, Fibonacci sphere
+│       │   └── dham/            3D dham scene (lazy loaded)
+│       │       ├── dhams.js         which temples, colours, text
+│       │       ├── Temple.jsx       procedural temples + opening doors
+│       │       ├── Environment.jsx  sky, sun, mountains, diyas, lights
+│       │       └── DhamScene.jsx    layout + camera (overview / door / enter)
 │       ├── components/          Layout (nav/footer), ui (cards, tilt, pills)
 │       ├── pages/               Home, Packages, PackageDetail, Checkout,
 │       │                        MyBookings, Auth (login/register), Admin
@@ -159,7 +162,7 @@ If a late payment arrives and the seats are gone, the payment is marked `REFUND_
 
 | Route | Page | Notes |
 |---|---|---|
-| `/` | Home | 3D globe with a glowing marker per destination (click → filtered list), categories, featured journeys |
+| `/` | Home | 3D dhams: hover walks to the door, click flies through it to that dham's journeys; categories, featured journeys |
 | `/packages` | Listing | Filters in the URL (shareable): search, category, destination, budget, days, sort, page |
 | `/packages/:slug` | Detail | Itinerary timeline, inclusions, reviews, sticky booking panel |
 | `/checkout/:id` | Checkout | Summary, seat-hold countdown, Razorpay popup |
@@ -167,9 +170,8 @@ If a late payment arrives and the seats are gone, the payment is marked `REFUND_
 | `/login`, `/register` | Auth | `?next=` redirect back |
 | `/admin` | Admin | Overview / Bookings / Packages tabs |
 
-### 3D scene (client/src/three/HeroScene.jsx)
-- **DottedGlobe** – 5,000 points on a Fibonacci sphere with a saffron→gold gradient, a dark core to hide back-facing dots, and a fresnel glow shader.
-- **Marker** – one per destination, placed from latitude/longitude, with a pulsing ring; hover shows a label, click navigates.
-- **Halo** – two thin rotating golden rings (a mandala feel).
-- **Stars + Sparkles** from drei, **OrbitControls** for drag (zoom/pan disabled).
+### 3D scene (client/src/three/dham/)
+- Five procedural temples (Kedarnath, Kashi Vishwanath, Jagannath Puri, Golden Temple, Rameswaram) in three architectural styles (nagara, gopuram, golden), at dusk with snow peaks and diyas.
+- **Hover** (desktop): the camera glides to the temple's door and the doors swing open with light. **Click**: the camera flies through the doorway, the screen fades to gold and the dham's journeys open. **Phones**: one dham at a time with arrows.
 - Loaded with `React.lazy`, so three.js (~250 KB gzipped) never blocks the first paint of the text.
+- Full explanation: [06-code-walkthrough.md §6.4](06-code-walkthrough.md).

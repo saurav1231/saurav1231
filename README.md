@@ -1,12 +1,12 @@
 # Ayana · 3D Spiritual Travel Marketplace
 
 **Ayana** (अयन) means *journey*. This repo is a complete, working marketplace where customers
-explore an interactive 3D globe of sacred places, pick a pilgrimage / yoga / meditation package,
+walk up to 3D dhams and step through their doors, pick a pilgrimage / yoga / meditation package,
 choose a date, and pay online with Razorpay. An admin panel lets you manage packages, dates and bookings.
 
 | | |
 |---|---|
-| Frontend | React 19, Vite, three.js / React Three Fiber (3D globe), React Router |
+| Frontend | React 19, Vite, three.js / React Three Fiber (3D dhams), React Router |
 | Backend | Node.js, Express 5, Prisma ORM, Zod, JWT |
 | Database | MySQL 8 / MariaDB |
 | Payments | Razorpay (UPI, cards, net banking, wallets) + mock mode for local dev |
@@ -18,6 +18,11 @@ choose a date, and pay online with Razorpay. An admin panel lets you manage pack
 3. [Database design (ER diagram, tables)](docs/03-database.md)
 4. [API reference](docs/04-api.md)
 5. [Hosting on Hostinger, step by step](docs/05-hostinger-deployment.md)
+6. [**Code walkthrough – every file explained**](docs/06-code-walkthrough.md)
+7. [**Cursor → GitHub → Hostinger, and what to buy**](docs/07-cursor-github-hostinger.md)
+8. [**Your data, the admin panel and analytics**](docs/08-admin-data-analytics.md)
+9. [**Growing: interface, API, database and servers**](docs/09-expansion.md)
+10. [**Building the Android app**](docs/10-android-app.md)
 
 ## 🚀 Run it locally (in Cursor)
 
@@ -35,6 +40,7 @@ cp server/.env.example server/.env        # Windows: copy server\.env.example se
 
 # 3. Create tables + demo data (11 packages, 12 destinations, admin user)
 npm run db:setup
+npm --prefix server run db:sample   # optional: a year of fake bookings for the Analytics tab
 
 # 4. Start the API (terminal 1)
 npm run dev:server
@@ -61,7 +67,7 @@ that user `GRANT ALL ON *.*` (never do this in production).
 
 ## 🗂 Project structure
 ```
-client/   React + 3D frontend   (src/three/HeroScene.jsx is the globe)
+client/   React + 3D frontend   (src/three/dham/ is the 3D temple scene)
 server/   Express API            (prisma/schema.prisma is the database)
 deploy/   Nginx, PM2, VPS setup, deploy and backup scripts
 docs/     Roadmap, architecture, database, API, Hostinger guide
@@ -71,7 +77,8 @@ docs/     Roadmap, architecture, database, API, Hostinger guide
 | I want to… | Edit |
 |---|---|
 | Change colours / fonts | `client/src/styles.css` (`:root` variables) |
-| Change the 3D globe | `client/src/three/HeroScene.jsx` |
+| Add or change a 3D dham | `client/src/three/dham/dhams.js` (list) and `Temple.jsx` (shapes) |
+| Add package photos | Admin → Packages → Photos |
 | Change home page text | `client/src/pages/Home.jsx` |
 | Add a field to packages | `server/prisma/schema.prisma` → `npx prisma migrate dev -n add_field` → admin form + API |
 | Change demo data | `server/prisma/seed.js` then `npm run db:setup` |

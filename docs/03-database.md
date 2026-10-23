@@ -13,6 +13,7 @@ erDiagram
   User ||--o{ Booking : makes
   User ||--o{ Review : writes
   Destination ||--o{ Package : has
+  Package ||--o{ PackageImage : "photos"
   Package ||--o{ ItineraryDay : "day by day"
   Package ||--o{ Departure : "runs on"
   Package ||--o{ Booking : "is booked in"
@@ -101,8 +102,9 @@ erDiagram
 | Table | Purpose | Important columns / indexes |
 |---|---|---|
 | `User` | Customers and admins | `email` unique; `role` |
-| `Destination` | Holy places shown on the 3D globe | `slug` unique; `latitude`, `longitude` |
+| `Destination` | Holy places (the 3D dhams link here by `slug`) | `slug` unique; `latitude`, `longitude` |
 | `Package` | A sellable journey | `slug` unique; index on `category`, `destinationId`, `(isActive,isFeatured)`; denormalised `ratingAvg/ratingCount` for fast listing |
+| `PackageImage` | Uploaded photos (large + thumbnail WEBP); lowest `sortOrder` is the cover | index `(packageId, sortOrder)`; cascades on package delete |
 | `ItineraryDay` | Day-by-day plan | unique `(packageId, dayNumber)`; cascades on package delete |
 | `Departure` | A dated batch with limited seats | `seatsBooked` includes seats held by pending bookings; optional `priceOverride` for peak dates |
 | `Booking` | A customer's reservation | `bookingRef` unique; index `(status, expiresAt)` for the expiry job |

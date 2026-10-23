@@ -43,7 +43,7 @@ gantt
 - Collect content: package photos, itineraries, prices, inclusions, cancellation policy.
 
 ### Phase 1 – MVP (weeks 2-4) ✅ code in this repo
-- Marketplace: home page with interactive 3D globe, listing with filters, package detail with itinerary.
+- Marketplace: home page where visitors walk up to 3D dhams and step through their doors, listing with filters, package detail with itinerary.
 - Accounts: register / login (JWT).
 - Booking: pick date + travellers → seats held for 30 min → pay → confirmed.
 - Payments: Razorpay Orders API + Checkout + signature verification + webhook. Mock mode for local dev.
