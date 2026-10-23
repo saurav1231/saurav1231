@@ -12,7 +12,16 @@ choose a date, and pay online with Razorpay. An admin panel lets you manage pack
 | Payments | Razorpay (UPI, cards, net banking, wallets) + mock mode for local dev |
 | Hosting | Hostinger VPS (Nginx + PM2 + MariaDB + Let's Encrypt) |
 
+![Ayana home page with five 3D dhams](docs/screenshots/home-3d-dhams.png)
+
+| Hover a dham to walk to its door | Package page | Admin analytics |
+|---|---|---|
+| ![Golden Temple](docs/screenshots/hover-golden-temple.png) | ![Package page](docs/screenshots/package-page.png) | ![Analytics](docs/screenshots/admin-analytics.png) |
+
+**New here? Read [docs/00-start-here.md](docs/00-start-here.md) first** – what is built, quick answers, and which guide to read.
+
 ## 📚 Documentation (read in order)
+0. [**Start here – overview and quick answers**](docs/00-start-here.md)
 1. [Project roadmap](docs/01-roadmap.md) – phases, timeline, costs
 2. [Architecture: HLD + LLD + tech stack](docs/02-architecture.md)
 3. [Database design (ER diagram, tables)](docs/03-database.md)
