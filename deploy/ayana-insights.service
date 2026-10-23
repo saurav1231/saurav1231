@@ -1,0 +1,15 @@
+# systemd service for Ayana Insights (Streamlit admin analytics), served at https://yourdomain.com/insights/
+# Install: sudo cp deploy/ayana-insights.service /etc/systemd/system/ && sudo systemctl enable --now ayana-insights
+[Unit]
+Description=Ayana Insights (Streamlit)
+After=network.target mariadb.service
+
+[Service]
+User=ayana
+WorkingDirectory=/var/www/ayana/analytics
+ExecStart=/var/www/ayana/analytics/.venv/bin/streamlit run Home.py --server.port 8501 --server.address 127.0.0.1 --server.baseUrlPath insights
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

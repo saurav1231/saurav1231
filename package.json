@@ -1,12 +1,11 @@
 {
   "name": "ayana",
   "private": true,
-  "description": "Ayana - 3D spiritual travel marketplace",
+  "description": "Ayana - 3D spiritual travel marketplace (React website; API in api/ is Python FastAPI)",
   "scripts": {
-    "setup": "npm --prefix server install && npm --prefix client install",
-    "db:setup": "npm --prefix server run db:setup",
-    "dev:server": "npm --prefix server run dev",
+    "setup:client": "npm --prefix client install",
     "dev:client": "npm --prefix client run dev",
-    "build": "npm --prefix client run build"
+    "build": "npm --prefix client run build",
+    "build:demo": "npm --prefix client run build:demo"
   }
 }

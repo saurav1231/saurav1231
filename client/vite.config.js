@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     port: 5173,
     // In development, /api calls are forwarded to the Express server.
-    proxy: { '/api': 'http://localhost:4000', '/uploads': 'http://localhost:4000' },
+    proxy: { '/api': 'http://localhost:8000', '/uploads': 'http://localhost:8000' },
   },
   build: {
     // three.js is ~1 MB but is lazy-loaded only for the 3D hero.

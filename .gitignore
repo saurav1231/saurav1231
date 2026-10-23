@@ -4,3 +4,8 @@ dist
 logs
 *.log
 .DS_Store
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/

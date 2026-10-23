@@ -125,7 +125,14 @@ export default function AdminAnalytics() {
             </button>
           ))}
         </div>
-        <button className="btn btn-small btn-ghost" onClick={() => downloadCsv(setError)}>Export bookings to Excel (CSV)</button>
+        <div className="row">
+          {!IS_DEMO && (
+            <a className="btn btn-small" href={import.meta.env.VITE_INSIGHTS_URL || '/insights/'} target="_blank" rel="noreferrer">
+              Open Ayana Insights: churn, journeys, growth
+            </a>
+          )}
+          <button className="btn btn-small btn-ghost" onClick={() => downloadCsv(setError)}>Export bookings to Excel (CSV)</button>
+        </div>
       </div>
       <ErrorBox error={error || loadError} />
       {loading || !data ? (

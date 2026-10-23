@@ -6,17 +6,23 @@ cd "$(dirname "$0")/.."
 
 git pull --ff-only
 
-echo "-> API dependencies + database migrations"
-(cd server && npm ci && npx prisma migrate deploy)
+echo "-> API: Python packages + database migrations"
+[ -d api/.venv ] || python3 -m venv api/.venv
+api/.venv/bin/pip install -q -r api/requirements.txt
+(cd api && .venv/bin/alembic upgrade head)
 
-echo "-> Frontend build"
+echo "-> Insights (Streamlit) packages"
+[ -d analytics/.venv ] || python3 -m venv analytics/.venv
+analytics/.venv/bin/pip install -q -r analytics/requirements.txt
+
+echo "-> Website build"
 (cd client && npm ci && npm run build)
 
-mkdir -p logs
-if pm2 describe ayana-api >/dev/null 2>&1; then
-  pm2 reload deploy/ecosystem.config.cjs
+echo "-> Restart services"
+if systemctl list-unit-files | grep -q '^ayana-api'; then
+  sudo systemctl restart ayana-api
+  sudo systemctl restart ayana-insights
 else
-  pm2 start deploy/ecosystem.config.cjs
-  pm2 save
+  echo "   (services not installed yet - see docs/07-cursor-github-hostinger.md step 7.7)"
 fi
-echo "-> Done. Check: curl -s http://127.0.0.1:4000/api/health"
+echo "-> Done. Check: curl -s http://127.0.0.1:8000/api/health"
