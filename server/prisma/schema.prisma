@@ -1,0 +1,173 @@
+// Ayana - database schema (MySQL 8 / MariaDB 10.6+)
+// Money is stored as integers in the smallest currency unit (paise for INR).
+
+generator client {
+  provider = "prisma-client-js"
+  // "native" = your laptop, the others cover Hostinger VPS / Cloud (Linux, OpenSSL 1.1 or 3)
+  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-1.1.x", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING // created, seats held, waiting for payment
+  CONFIRMED // paid
+  CANCELLED // cancelled by user/admin
+  EXPIRED // not paid within the hold window, seats released
+}
+
+enum PaymentStatus {
+  CREATED // order created at the payment gateway
+  PAID // captured
+  FAILED
+  REFUND_PENDING // paid but booking could not be honoured (e.g. sold out)
+  REFUNDED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String    @db.VarChar(120)
+  email        String    @unique @db.VarChar(191)
+  phone        String?   @db.VarChar(20)
+  passwordHash String    @db.VarChar(255)
+  role         Role      @default(USER)
+  bookings     Booking[]
+  reviews      Review[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Destination {
+  id          String    @id @default(cuid())
+  slug        String    @unique @db.VarChar(191)
+  name        String    @db.VarChar(120)
+  state       String?   @db.VarChar(120)
+  country     String    @default("India") @db.VarChar(80)
+  description String    @db.Text
+  latitude    Float
+  longitude   Float
+  imageUrl    String?   @db.VarChar(500)
+  packages    Package[]
+  createdAt   DateTime  @default(now())
+}
+
+model Package {
+  id             String         @id @default(cuid())
+  slug           String         @unique @db.VarChar(191)
+  title          String         @db.VarChar(200)
+  summary        String         @db.VarChar(400)
+  description    String         @db.Text
+  category       String         @db.VarChar(60) // Pilgrimage, Yoga Retreat, Meditation, Trek ...
+  durationDays   Int
+  pricePerPerson Int // paise
+  currency       String         @default("INR") @db.VarChar(3)
+  imageUrl       String?        @db.VarChar(500)
+  highlights     Json // string[]
+  inclusions     Json // string[]
+  exclusions     Json // string[]
+  maxGroupSize   Int            @default(20)
+  isActive       Boolean        @default(true)
+  isFeatured     Boolean        @default(false)
+  ratingAvg      Float          @default(0)
+  ratingCount    Int            @default(0)
+  destinationId  String
+  destination    Destination    @relation(fields: [destinationId], references: [id])
+  itinerary      ItineraryDay[]
+  departures     Departure[]
+  bookings       Booking[]
+  reviews        Review[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([category])
+  @@index([destinationId])
+  @@index([isActive, isFeatured])
+}
+
+model ItineraryDay {
+  id          String  @id @default(cuid())
+  packageId   String
+  package     Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  dayNumber   Int
+  title       String  @db.VarChar(200)
+  description String  @db.Text
+
+  @@unique([packageId, dayNumber])
+}
+
+model Departure {
+  id            String    @id @default(cuid())
+  packageId     String
+  package       Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  startDate     DateTime  @db.Date
+  seatsTotal    Int
+  seatsBooked   Int       @default(0) // includes seats held by PENDING bookings
+  priceOverride Int? // paise, overrides Package.pricePerPerson for this date
+  isActive      Boolean   @default(true)
+  bookings      Booking[]
+
+  @@index([packageId, startDate])
+}
+
+model Booking {
+  id              String        @id @default(cuid())
+  bookingRef      String        @unique @db.VarChar(20) // human friendly, e.g. AYN-7K2P9Q
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+  packageId       String
+  package         Package       @relation(fields: [packageId], references: [id])
+  departureId     String
+  departure       Departure     @relation(fields: [departureId], references: [id])
+  travelers       Int
+  amount          Int // paise, total = unit price x travelers
+  currency        String        @default("INR") @db.VarChar(3)
+  status          BookingStatus @default(PENDING)
+  contactName     String        @db.VarChar(120)
+  contactPhone    String        @db.VarChar(20)
+  specialRequests String?       @db.Text
+  expiresAt       DateTime // seat hold ends here if still PENDING
+  payments        Payment[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([status, expiresAt])
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  bookingId         String
+  booking           Booking       @relation(fields: [bookingId], references: [id])
+  provider          String        @default("razorpay") @db.VarChar(20)
+  providerOrderId   String        @unique @db.VarChar(100)
+  providerPaymentId String?       @unique @db.VarChar(100)
+  amount            Int // paise
+  currency          String        @default("INR") @db.VarChar(3)
+  status            PaymentStatus @default(CREATED)
+  rawResponse       Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([bookingId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  packageId String
+  package   Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  rating    Int // 1..5
+  comment   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@unique([userId, packageId])
+}

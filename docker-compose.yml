@@ -1,0 +1,17 @@
+# Optional: local MySQL for development if you don't have MySQL installed.
+#   docker compose up -d
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ayana
+      MYSQL_USER: ayana
+      MYSQL_PASSWORD: ayana_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - ayana-db:/var/lib/mysql
+volumes:
+  ayana-db:

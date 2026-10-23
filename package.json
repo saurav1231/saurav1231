@@ -1,0 +1,12 @@
+{
+  "name": "ayana",
+  "private": true,
+  "description": "Ayana - 3D spiritual travel marketplace",
+  "scripts": {
+    "setup": "npm --prefix server install && npm --prefix client install",
+    "db:setup": "npm --prefix server run db:setup",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client run build"
+  }
+}

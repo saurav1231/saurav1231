@@ -1,0 +1,7 @@
+Project: Ayana, a spiritual travel marketplace.
+- client/: React 19 + Vite + React Three Fiber. Plain CSS in src/styles.css. API calls go through src/api.js.
+- server/: Express 5 (ESM) + Prisma (MySQL) + Zod. Routes in src/routes, business logic in src/services.
+- Money is always integer paise. Prices are computed on the server, never trusted from the client.
+- Validate every request with zod via lib/validate.js; throw HttpError helpers from lib/errors.js.
+- After changing server/prisma/schema.prisma run `npx prisma migrate dev -n <name>` in server/.
+- Docs for architecture, DB and API live in docs/. Keep docs/04-api.md in sync when adding endpoints.
