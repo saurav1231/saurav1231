@@ -11,15 +11,17 @@ the explanations. This page answers the main questions briefly and points to the
 |---|---|---|
 | 3D entrance | Five dhams at dusk (Kedarnath, Kashi Vishwanath, Jagannath Puri, Golden Temple, Rameswaram). Hover walks you to the door and the doors open; click flies through it to that dham's journeys. Phones see one dham at a time with arrows. | `client/src/three/dham/` |
 | Marketplace | Journey listing with filters, package page with photos, itinerary, reviews and booking panel | `client/src/pages/` |
-| Booking & payment | Seats held for 30 minutes, Razorpay payment (UPI, cards, net banking), signature check, webhook backup | `server/src/services/bookingService.js`, `paymentService.js` |
-| Accounts | Register / login, my bookings, reviews after a trip | `server/src/routes/auth.js`, `bookings.js` |
+| Booking & payment | Seats held for 30 minutes, Razorpay payment (UPI, cards, net banking), signature check, webhook backup | `api/app/services/booking.py`, `payment.py` |
+| Accounts | Register / login, my bookings, reviews after a trip | `api/app/routers/auth.py`, `bookings.py` |
 | Admin panel | Overview, Analytics, Bookings, Packages (edit, photos, dates) and Excel export | `client/src/pages/Admin.jsx`, `AdminAnalytics.jsx` |
-| Database | 9 tables in MySQL | `server/prisma/schema.prisma` |
-| Hosting | Hostinger VPS scripts, Nginx, PM2, backups, auto-deploy from GitHub | `deploy/`, `.github/workflows/deploy.yml` |
+| API | Python FastAPI with the same endpoints the website and future apps use; interactive docs at `/docs` | `api/` |
+| Admin analytics | **Ayana Insights** (Streamlit): growth and regrowth, customer journeys between dhams, churn, cohorts, segments, seats | `analytics/` |
+| Database | 9 tables in MySQL, versioned with Alembic | `api/app/models.py` |
+| Hosting | Hostinger VPS scripts, Nginx, systemd, backups, tests + auto-deploy from GitHub | `deploy/`, `.github/workflows/deploy.yml` |
 
-| Hover a dham | Phone view | Admin analytics |
+| Hover a dham | Phone view | Ayana Insights |
 |---|---|---|
-| ![Golden Temple doors open](screenshots/hover-golden-temple.png) | ![Phone view](screenshots/phone-view.png) | ![Analytics](screenshots/admin-analytics.png) |
+| ![Golden Temple doors open](screenshots/hover-golden-temple.png) | ![Phone view](screenshots/phone-view.png) | ![Insights](screenshots/insights-overview.png) |
 
 ## Guides
 
@@ -35,11 +37,13 @@ the explanations. This page answers the main questions briefly and points to the
 | 08 | [**Your data, admin panel and analytics**](08-admin-data-analytics.md) | know where data is stored and how to analyse it |
 | 09 | [**Growing: interface, API, database, servers**](09-expansion.md) | add partner operators, languages, more traffic |
 | 10 | [**Android app**](10-android-app.md) | build and publish the mobile app |
+| 11 | [**Ayana Insights (Streamlit analytics)**](11-streamlit-analytics.md) | read growth, churn and customer movement – and what each number means |
 
 ## Quick answers
 
-**How do I run it?** Install Node.js, Git, Docker Desktop and Cursor, open this folder in Cursor and follow the
-[README](../README.md) – four commands, then open http://localhost:5173. → [Guide 07 §7.2–7.4](07-cursor-github-hostinger.md)
+**How do I run it?** Install Python, Node.js, Git, Docker Desktop and Cursor, open this folder in Cursor and follow the
+[README](../README.md): the database in Docker, the API (`uvicorn`), the website (`npm run dev`) and Insights
+(`streamlit run Home.py`), each in its own terminal. → [Guide 07 §7.2–7.4](07-cursor-github-hostinger.md)
 
 **How does code reach the live site?** Edit in Cursor → commit & push to GitHub → on every push to `main`, GitHub
 Actions logs into your Hostinger VPS and runs `deploy/deploy.sh`. Set up once with three secrets. → [Guide 07 §7.8](07-cursor-github-hostinger.md)
@@ -49,11 +53,11 @@ to open and charges ≈ 2 % per payment. SSL, GitHub and Cursor's free plan cost
 Android app. Roughly ₹10–15k for the first year. Check current prices. → [Guide 07 §7.1](07-cursor-github-hostinger.md)
 
 **Where is the data?** In a MySQL database on your VPS (customers, packages, bookings, payments, reviews); photos in
-`server/uploads` on the VPS; card/UPI details stay with Razorpay. Daily backups of both. → [Guide 08 §8.1](08-admin-data-analytics.md)
+`api/uploads` on the VPS; card/UPI details stay with Razorpay. Daily backups of both. → [Guide 08 §8.1](08-admin-data-analytics.md)
 
-**How does the admin see it?** `yourdomain.com/admin`: Overview, Bookings, Packages, Analytics (revenue by month, top
-journeys, destinations, conversion, repeat customers, seats filled) and Excel export. Advanced: database apps or Metabase
-through an SSH tunnel. → [Guide 08 §8.2–8.4](08-admin-data-analytics.md)
+**How does the admin see it?** Day to day in `yourdomain.com/admin` (bookings, packages, photos, quick analytics, Excel
+export). For deep analysis, **Ayana Insights** at `yourdomain.com/insights/`: revenue growth and regrowth, how customers
+move from dham to dham, churn and retention, segments with who to call. → [Guide 11](11-streamlit-analytics.md) → [Guide 08 §8.2–8.4](08-admin-data-analytics.md)
 
 **How do I add real photos?** Admin → Packages → **Photos** → *Add photos*. The first photo is the cover. → [Guide 08 §8.5](08-admin-data-analytics.md)
 

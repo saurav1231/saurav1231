@@ -23,7 +23,7 @@ You write and test on your laptop, save each step to GitHub, and GitHub updates 
 | SSL certificate (https) | Yes | Let's Encrypt (installed by our script) | Free |
 | GitHub account (private repo) | Yes | github.com | Free |
 | Cursor editor | Yes | cursor.com | Free plan works; Pro ≈ US$20 / month for more AI usage |
-| Node.js, Git, Docker Desktop | Yes (laptop) | nodejs.org, git-scm.com, docker.com | Free |
+| Python, Node.js, Git, Docker Desktop | Yes (laptop) | python.org, nodejs.org, git-scm.com, docker.com | Free |
 | Professional email (hello@yourdomain.com) | Recommended | Hostinger Email or Google Workspace | ≈ ₹100 – 250 per mailbox / month |
 | Google Play developer account | For the Android app | play.google.com/console | US$25 once |
 | Apple developer account | Only for an iPhone app | developer.apple.com | US$99 / year |
@@ -40,11 +40,12 @@ Razorpay settlements, PAN, and the policy pages Razorpay asks for (Terms, Privac
 
 ## 7.2 Set up your laptop (once)
 
-1. Install **Node.js LTS** (version 22) – nodejs.org → "LTS" → install with defaults.
-2. Install **Git** – git-scm.com → download → defaults.
-3. Install **Docker Desktop** – it runs MySQL for you. (Or install MySQL directly.)
-4. Install **Cursor** – cursor.com → sign in.
-5. Tell Git who you are (Cursor → Terminal → New Terminal):
+1. Install **Python 3.12 or newer** – python.org → Downloads. On Windows tick **"Add python.exe to PATH"**.
+2. Install **Node.js LTS** (version 22) – nodejs.org → "LTS". Only needed to build the website.
+3. Install **Git** – git-scm.com → download → defaults.
+4. Install **Docker Desktop** – it runs MySQL for you. (Or install MySQL directly.)
+5. Install **Cursor** – cursor.com → sign in. Accept its offer to install the **Python** extension.
+6. Tell Git who you are (Cursor → Terminal → New Terminal):
    ```bash
    git config --global user.name "Your Name"
    git config --global user.email "you@example.com"
@@ -70,19 +71,42 @@ profile page. Give Ayana its own **private** repository:
 
 ## 7.4 Run it on your laptop
 
-In Cursor's terminal (``Ctrl+` ``):
-```bash
-docker compose up -d                 # start MySQL
-npm run setup                        # install libraries (takes a few minutes)
-cp server/.env.example server/.env   # Windows: copy server\.env.example server\.env
-npm run db:setup                     # tables + demo packages + admin user
-npm --prefix server run db:sample    # optional: fake bookings so Analytics has data
-npm run dev:server                   # terminal 1 – API on :4000
-npm run dev:client                   # terminal 2 – website on :5173
-```
-Open http://localhost:5173. Admin: `admin@ayana.travel` / `Admin@12345`.
+You will use three terminals in Cursor (``Ctrl+` `` opens one, the **+** button adds more).
 
-**Using Cursor's AI:** `Ctrl+L` opens chat (ask "explain server/src/services/bookingService.js" or "add a phone field to
+**Terminal 1 – database and API (Python)**
+```bash
+docker compose up -d                  # start MySQL
+cd api
+python -m venv .venv                  # a private folder for this project's Python libraries
+source .venv/bin/activate             # Windows: .venv\Scripts\activate   (you'll see "(.venv)" in the prompt)
+pip install -r requirements.txt
+cp .env.example .env                  # Windows: copy .env.example .env
+alembic upgrade head                  # create the tables
+python -m scripts.seed                # demo journeys + admin user
+python -m scripts.sample_data         # optional: 2 years of sample customers so analytics have data
+uvicorn app.main:app --reload --port 8000
+```
+**Terminal 2 – website**
+```bash
+cd client
+npm install
+npm run dev
+```
+**Terminal 3 – Ayana Insights (analytics)**
+```bash
+cd analytics
+python -m venv .venv
+source .venv/bin/activate             # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+streamlit run Home.py
+```
+Open http://localhost:5173 (website), http://localhost:8000/docs (try the API) and http://localhost:8501 (Insights).
+Admin: `admin@ayana.travel` / `Admin@12345`. In Cursor, choose the interpreter `api/.venv` (bottom-right "Python")
+so it understands the code.
+
+Run the tests any time: `cd api && pytest` and `cd analytics && pytest`.
+
+**Using Cursor's AI:** `Ctrl+L` opens chat (ask "explain api/app/services/booking.py" or "add a phone field to
 the register form"), `Ctrl+K` edits the selected code, type `@` to point it at a file or a doc such as `@docs/06-code-walkthrough.md`.
 Always run the site and click through the change before you commit it.
 
@@ -115,7 +139,7 @@ scp deploy/setup-vps.sh root@<VPS IP>:/root/     # copy the setup script to the 
 ssh root@<VPS IP>
 bash /root/setup-vps.sh yourdomain.com you@email.com
 ```
-The script prints a `DATABASE_URL` – copy it.
+The script prints two database addresses – copy both (one for `api/.env`, one for `analytics/.env`).
 
 **Let the server read your private repo (deploy key)** – still on the server:
 ```bash
@@ -127,18 +151,24 @@ Copy the printed line → GitHub repo → **Settings → Deploy keys → Add dep
 ```bash
 git clone git@github.com:saurav1231/ayana.git /var/www/ayana
 cd /var/www/ayana
-cp server/.env.example server/.env && nano server/.env
+cp api/.env.example api/.env && nano api/.env
 ```
-Fill `server/.env` as shown in [05-hostinger-deployment.md §4](05-hostinger-deployment.md) (production values,
+Fill `api/.env` as shown in [05-hostinger-deployment.md §5.3](05-hostinger-deployment.md) (production values,
 `PAYMENT_MODE=razorpay`, your keys, the printed `DATABASE_URL`, a long random `JWT_SECRET`).
 **Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` to your own** – the seed creates the admin account with them (the demo password is for your laptop only).
-Save: `Ctrl+O`, `Enter`, `Ctrl+X`.
+Save: `Ctrl+O`, `Enter`, `Ctrl+X`. Then the analytics settings:
+```bash
+cp analytics/.env.example analytics/.env && nano analytics/.env   # paste the printed ANALYTICS_DATABASE_URL
+```
 
 ```bash
-bash deploy/deploy.sh          # install, create tables, build site, start API
-cd server && npm run db:seed && cd ..   # first time only: demo packages + admin user
-exit                           # back to root
-pm2 startup systemd -u ayana --hp /home/ayana   # copy-paste the command it prints
+mkdir -p logs
+bash deploy/deploy.sh                                  # Python packages, tables, website build
+(cd api && .venv/bin/python -m scripts.seed)           # first time only: journeys + your admin user
+exit                                                   # back to root
+cp /var/www/ayana/deploy/ayana-api.service /var/www/ayana/deploy/ayana-insights.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now ayana-api ayana-insights        # start now and after every reboot
 ```
 Then Nginx + HTTPS (as root):
 ```bash
@@ -149,7 +179,7 @@ rm -f /etc/nginx/sites-enabled/default && nginx -t && systemctl reload nginx
 certbot --nginx -d yourdomain.com -d www.yourdomain.com -m you@email.com --agree-tos -n
 ```
 Open **https://yourdomain.com** – your site is live. Log in with your admin email, then hide the demo packages you
-don't sell and add your own (Admin → Packages).
+don't sell and add your own (Admin → Packages). Analytics: **https://yourdomain.com/insights/**.
 
 ## 7.8 Automatic deploys from GitHub (do once)
 
@@ -167,14 +197,14 @@ So that every push to `main` updates the server by itself:
    - `VPS_USER` = `ayana`
    - `VPS_SSH_KEY` = the full content of the private file `ayana_deploy`
 4. Delete the two key files from your laptop's project folder (never commit them).
-5. Push any change to `main` → GitHub → **Actions** tab shows "Deploy to Hostinger" running: *build* checks the code,
+5. Push any change to `main` → GitHub → **Actions** tab shows "Test and deploy" running: *test* runs the API and analytics tests and builds the website,
    *deploy* logs into the VPS and runs `deploy/deploy.sh`. Green tick = live. Red cross = click it to read the error;
    the live site stays on the previous version.
 
 ## 7.9 Turn on real payments
 
 1. Razorpay Dashboard → complete **KYC** (business details, bank account, website URL with the policy pages).
-2. **Test mode** first: Settings → API Keys → generate `rzp_test_…` keys → put them in `server/.env` → `pm2 reload ayana-api`.
+2. **Test mode** first: Settings → API Keys → generate `rzp_test_…` keys → put them in `api/.env` → `sudo systemctl restart ayana-api`.
 3. Webhooks → Add: URL `https://yourdomain.com/api/payments/webhook`, secret = `RAZORPAY_WEBHOOK_SECRET`,
    events `payment.captured`, `payment.failed`, `order.paid`.
 4. Make test bookings (test UPI id `success@razorpay`, test cards from Razorpay docs).
@@ -184,9 +214,10 @@ So that every push to `main` updates the server by itself:
 
 | Task | Command (after `ssh ayana@<VPS IP>`) |
 |---|---|
-| See API logs | `pm2 logs ayana-api` |
-| Restart API | `pm2 reload ayana-api` |
-| Is it running? | `pm2 status` · `curl -s localhost:4000/api/health` |
+| See API logs | `journalctl -u ayana-api -f` |
+| See Insights logs | `journalctl -u ayana-insights -f` |
+| Restart | `sudo systemctl restart ayana-api` (or `ayana-insights`) |
+| Is it running? | `systemctl status ayana-api` · `curl -s localhost:8000/api/health` |
 | Deploy by hand | `cd /var/www/ayana && bash deploy/deploy.sh` |
 | Daily backups | `crontab -e` → `30 2 * * * bash /var/www/ayana/deploy/backup-db.sh >> /var/www/ayana/logs/backup.log 2>&1` |
 | Disk space | `df -h` |

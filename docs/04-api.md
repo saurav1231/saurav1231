@@ -1,6 +1,9 @@
 # 4. REST API Reference
 
-Base URL: `https://<your-domain>/api` (local: `http://localhost:4000/api`).
+Base URL: `https://<your-domain>/api` (local: `http://localhost:8000/api`).
+
+The API is **Python FastAPI** (`api/`). Open **http://localhost:8000/docs** to see every endpoint with its fields and try
+them from the browser (click *Authorize* and paste a token from `/api/auth/login` for the protected ones).
 All bodies are JSON. Authenticated routes need `Authorization: Bearer <token>`.
 Errors look like `{ "error": "message", "details": { "field": ["problem"] } }`.
 Amounts are in **paise** (₹1 = 100).
@@ -61,7 +64,7 @@ Photos are served at `/uploads/packages/<packageId>/<name>.webp` (and `-thumb.we
 ## Example: full flow with curl
 
 ```bash
-API=http://localhost:4000/api
+API=http://localhost:8000/api
 TOKEN=$(curl -s -X POST $API/auth/register -H 'content-type: application/json' \
   -d '{"name":"Asha","email":"asha@example.com","password":"password123"}' | jq -r .token)
 DEP=$(curl -s $API/packages/golden-temple-seva | jq -r '.package.departures[0].id')

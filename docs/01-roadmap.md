@@ -68,7 +68,7 @@ gantt
 
 | Role | Phase 1-2 |
 |---|---|
-| Full-stack developer (React + Node) | 6 weeks |
+| Full-stack developer (React + Python/FastAPI) | 6 weeks |
 | Designer / content writer | 2-3 weeks part time |
 | You (owner) | Content, Razorpay KYC, testing |
 

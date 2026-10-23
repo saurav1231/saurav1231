@@ -1,133 +1,86 @@
-# 5. Hosting on Hostinger
+# 5. Hosting on Hostinger (reference)
+
+The step-by-step version for beginners is **[07-cursor-github-hostinger.md](07-cursor-github-hostinger.md)**.
+This page is the reference: what runs where and the production settings.
 
 ## 5.1 Which Hostinger product?
 
-| Option | Good for | Database | Verdict |
-|---|---|---|---|
-| **A. KVM VPS (KVM 2 recommended)** | Full Node.js + MySQL control, background jobs, webhooks | MariaDB/MySQL on the same VPS, localhost only | ✅ **Recommended** |
-| B. Business / Cloud web hosting with "Node.js apps" in hPanel | Small sites, no Linux admin | hPanel → Databases → MySQL | Works if your plan lists Node.js apps; less control |
-| C. Shared hosting without Node.js | PHP sites only | – | ❌ Can't run this API |
+| Option | Good for | Verdict |
+|---|---|---|
+| **A. KVM VPS (KVM 2 recommended)** | Python API + Streamlit + MySQL + Nginx on one machine you control | ✅ **Recommended** |
+| B. Shared / Business / Cloud web hosting | PHP sites; Python apps and long-running services are not supported the way we need | ❌ Not suitable for FastAPI + Streamlit |
 
-Final production picture (Option A):
+## 5.2 What runs on the VPS
 
 ```mermaid
 flowchart TB
-  U["Visitors"] -->|"DNS A record → VPS IP"| N
+  U["Visitors / admins"] -->|"DNS A record → VPS IP"| N
   subgraph VPS["Hostinger KVM 2 VPS · Ubuntu 24.04"]
-    N["Nginx :80/:443<br/>Let's Encrypt SSL"] -->|"/"| S["/var/www/ayana/client/dist<br/>(static React build)"]
-    N -->|"/api/*"| P["PM2 → Node.js API :4000"]
-    P --> M[("MariaDB :3306<br/>127.0.0.1 only")]
+    N["Nginx :80/:443<br/>Let's Encrypt SSL"] -->|"/"| S["/var/www/ayana/client/dist<br/>(built website)"]
+    N -->|"/api/*"| A["systemd: ayana-api<br/>Uvicorn + FastAPI :8000"]
+    N -->|"/insights/*"| I["systemd: ayana-insights<br/>Streamlit :8501"]
+    N -->|"/uploads/*"| F["/var/www/ayana/api/uploads"]
+    A --> M[("MariaDB :3306<br/>127.0.0.1 only")]
+    I -->|"read-only user"| M
     C["cron 02:30 → backup-db.sh"] --> M
   end
   R["Razorpay"] -->|"webhook /api/payments/webhook"| N
 ```
 
-## 5.2 Step by step (Option A – VPS)
+| Piece | Where | Managed by |
+|---|---|---|
+| Code | `/var/www/ayana` (git clone) | `deploy/deploy.sh` |
+| API | `api/.venv`, port 8000 | `deploy/ayana-api.service` (systemd) |
+| Insights | `analytics/.venv`, port 8501, URL `/insights/` | `deploy/ayana-insights.service` |
+| Website | `client/dist` | built by `deploy.sh`, served by Nginx |
+| Database | MariaDB, users `ayana` (read/write) and `ayana_read` | created by `deploy/setup-vps.sh` |
+| Nginx site | `/etc/nginx/sites-available/ayana` | copy of `deploy/nginx.conf` |
 
-### 1. Buy and set up the VPS
-1. hPanel → **VPS** → choose **KVM 2** → OS: **Ubuntu 24.04** (plain OS).
-2. Set a root password and **add your SSH key** (hPanel → VPS → Settings → SSH keys).
-3. Note the VPS **IP address**.
+## 5.3 Production settings
 
-### 2. Point your domain
-hPanel → **Domains** → your domain → **DNS / Nameservers** → edit records:
-
-| Type | Name | Points to | TTL |
-|---|---|---|---|
-| A | `@` | your VPS IP | 300 |
-| A | `www` | your VPS IP | 300 |
-
-(Domain bought elsewhere? Add the same A records at that registrar.) DNS can take up to a few hours.
-
-### 3. Prepare the server (one time)
-```bash
-ssh root@YOUR_VPS_IP
-git clone https://github.com/saurav1231/saurav1231.git /tmp/ayana-setup
-bash /tmp/ayana-setup/deploy/setup-vps.sh ayana.travel you@email.com
-```
-This installs Nginx, MariaDB, Node.js 22, PM2, the firewall, creates the `ayana` database + user and **prints your `DATABASE_URL`** – copy it.
-
-### 4. Get the code on the server
-```bash
-su - ayana
-git clone https://github.com/saurav1231/saurav1231.git /var/www/ayana
-cd /var/www/ayana
-cp server/.env.example server/.env
-nano server/.env
-```
-Production `server/.env`:
+`api/.env`
 ```env
-NODE_ENV=production
-PORT=4000
-CLIENT_URL=https://ayana.travel
-DATABASE_URL="mysql://ayana:<printed-password>@localhost:3306/ayana"
-JWT_SECRET=<run: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))">
+ENVIRONMENT=production
+CLIENT_URL=https://yourdomain.com
+DATABASE_URL=mysql+pymysql://ayana:<printed-password>@localhost:3306/ayana
+JWT_SECRET=<python -c "import secrets; print(secrets.token_hex(48))">
 PAYMENT_MODE=razorpay
-RAZORPAY_KEY_ID=rzp_test_xxx        # switch to rzp_live_ after testing
+RAZORPAY_KEY_ID=rzp_test_xxx        # rzp_live_ after testing
 RAZORPAY_KEY_SECRET=xxx
-RAZORPAY_WEBHOOK_SECRET=<any long random string, same as in Razorpay dashboard>
+RAZORPAY_WEBHOOK_SECRET=<long random string, same as in the Razorpay dashboard>
 ADMIN_EMAIL=you@yourdomain.com
 ADMIN_PASSWORD=<strong password>
 ```
-The repo is private? Use a GitHub deploy key or `git clone https://<token>@github.com/...`.
 
-### 5. Build, migrate, start
-```bash
-bash deploy/deploy.sh          # installs, runs migrations, builds React, starts PM2
-cd server && npm run db:seed   # first time only: demo packages + admin user
-exit                           # back to root
-pm2 startup systemd -u ayana --hp /home/ayana   # run the command it prints, so PM2 starts on reboot
+`analytics/.env`
+```env
+ANALYTICS_DATABASE_URL=mysql+pymysql://ayana_read:<printed-password>@localhost:3306/ayana
 ```
 
-### 6. Nginx + HTTPS (as root)
-```bash
-cp /var/www/ayana/deploy/nginx.conf /etc/nginx/sites-available/ayana
-sed -i 's/ayana.travel/YOURDOMAIN.com/g' /etc/nginx/sites-available/ayana
-ln -sf /etc/nginx/sites-available/ayana /etc/nginx/sites-enabled/ayana
-rm -f /etc/nginx/sites-enabled/default
-nginx -t && systemctl reload nginx
-certbot --nginx -d YOURDOMAIN.com -d www.YOURDOMAIN.com -m you@email.com --agree-tos -n
-```
-Open `https://YOURDOMAIN.com` – the 3D site should load. `https://YOURDOMAIN.com/api/health` should return `{"ok":true}`.
+## 5.4 Razorpay
+1. Dashboard → **Account & Settings → API Keys** → test keys → `api/.env` → `sudo systemctl restart ayana-api`.
+2. **Webhooks → Add**: `https://yourdomain.com/api/payments/webhook`, secret = `RAZORPAY_WEBHOOK_SECRET`,
+   events `payment.captured`, `payment.failed`, `order.paid`.
+3. Test with UPI `success@razorpay`, then switch to live keys after KYC.
 
-### 7. Razorpay
-1. Dashboard → **Account & Settings → API Keys** → generate test keys → put in `.env` → `pm2 reload ayana-api`.
-2. Dashboard → **Webhooks → Add new**: URL `https://YOURDOMAIN.com/api/payments/webhook`, secret = `RAZORPAY_WEBHOOK_SECRET`, events: `payment.captured`, `payment.failed`, `order.paid`.
-3. Make a test booking with Razorpay test card / UPI `success@razorpay`.
-4. After KYC approval, generate **live** keys, add a live webhook, update `.env`, reload.
+## 5.5 Operations
 
-### 8. Backups and monitoring
-```bash
-crontab -e   # as user ayana
-30 2 * * * bash /var/www/ayana/deploy/backup-db.sh >> /var/www/ayana/logs/backup.log 2>&1
-```
-- Turn on hPanel → VPS → **Backups** (weekly snapshots).
-- Free uptime alert: UptimeRobot on `https://YOURDOMAIN.com/api/health`.
-- Logs: `pm2 logs ayana-api`, `/var/log/nginx/error.log`.
+| Task | Command (as `ayana` on the VPS) |
+|---|---|
+| API logs | `journalctl -u ayana-api -f` |
+| Insights logs | `journalctl -u ayana-insights -f` |
+| Restart | `sudo systemctl restart ayana-api` / `ayana-insights` |
+| Health | `curl -s localhost:8000/api/health` |
+| Deploy by hand | `cd /var/www/ayana && bash deploy/deploy.sh` |
+| Backups | `crontab -e` → `30 2 * * * bash /var/www/ayana/deploy/backup-db.sh >> /var/www/ayana/logs/backup.log 2>&1` |
+| Restore a backup | `gunzip -c ayana-DATE.sql.gz \| mysql -u ayana -p ayana` and `tar xzf ayana-uploads-DATE.tgz -C /var/www/ayana/api` |
 
-### 9. Shipping updates
-Push to GitHub from Cursor, then on the server:
-```bash
-ssh ayana@YOUR_VPS_IP 'cd /var/www/ayana && bash deploy/deploy.sh'
-```
-
-## 5.3 Option B – Hostinger web hosting with Node.js apps
-If your Business/Cloud plan shows **Websites → Node.js** (or "Add Node.js app") in hPanel:
-1. hPanel → **Databases → MySQL Databases** → create DB + user. Your URL looks like
-   `mysql://u123456789_ayana:<pass>@localhost:3306/u123456789_ayana`.
-2. Build the frontend on your laptop: `cd client && npm run build` (commit `client/dist` or upload it).
-3. Create the Node.js app pointing at the repo/zip, **root = `server`**, start file `src/index.js`, Node 20+.
-4. Add the environment variables from `.env.example`, plus `SERVE_CLIENT=true` (Express then serves `client/dist` itself, no Nginx needed).
-5. Run `npx prisma migrate deploy` and `npm run db:seed` from the app's terminal / SSH.
-6. Point the domain in hPanel and enable the free SSL.
-
-Limits: the seat-expiry job needs the app to stay running (it does on these plans, but it may sleep on the cheapest tiers), and you get less control over Node versions and logs. Move to a VPS when traffic grows.
-
-## 5.4 Go-live checklist
-- [ ] `NODE_ENV=production`, strong `JWT_SECRET`, `PAYMENT_MODE=razorpay`, live keys
-- [ ] Admin password changed from the seed default
-- [ ] HTTPS works on `www` and bare domain
+## 5.6 Go-live checklist
+- [ ] `ENVIRONMENT=production`, strong `JWT_SECRET`, `PAYMENT_MODE=razorpay`, live keys
+- [ ] Your own admin email/password set **before** the first seed
+- [ ] **Never** run `scripts.sample_data` on the server (it refuses in production anyway)
+- [ ] HTTPS on `www` and bare domain; `/insights/` asks for the admin login
 - [ ] Webhook delivers (Razorpay dashboard shows 200)
-- [ ] Daily backup runs, and you tested restoring one: `gunzip -c file.sql.gz | mysql -u ayana -p ayana`
+- [ ] Nightly backup runs, and a restore was tested once
 - [ ] Policy pages live (Terms, Privacy, Refund/Cancellation, Contact)
-- [ ] Real photos added to packages (admin → Edit → Image URL)
+- [ ] Real photos on every package

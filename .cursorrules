@@ -1,7 +1,11 @@
 Project: Ayana, a spiritual travel marketplace.
-- client/: React 19 + Vite + React Three Fiber. Plain CSS in src/styles.css. API calls go through src/api.js.
-- server/: Express 5 (ESM) + Prisma (MySQL) + Zod. Routes in src/routes, business logic in src/services.
-- Money is always integer paise. Prices are computed on the server, never trusted from the client.
-- Validate every request with zod via lib/validate.js; throw HttpError helpers from lib/errors.js.
-- After changing server/prisma/schema.prisma run `npx prisma migrate dev -n <name>` in server/.
-- Docs for architecture, DB and API live in docs/. Keep docs/04-api.md in sync when adding endpoints.
+- client/: React 19 + Vite + React Three Fiber. Plain CSS in src/styles.css. All API calls go through src/api.js.
+- api/: Python FastAPI + SQLAlchemy 2 + Alembic + Pydantic, MySQL. Routes in app/routers, business rules in app/services,
+  tables in app/models.py, request shapes in app/schemas.py, JSON shapes in app/serializers.py.
+- analytics/: Streamlit admin analytics. Calculations only in ayana_analytics/metrics.py (pure pandas, tested);
+  pages in pages/; colours and filters in ayana_analytics/ui.py.
+- Money is always integer paise in the database. Prices are computed on the server, never trusted from the client.
+- JSON sent to the website uses camelCase keys; Python code and database columns use snake_case.
+- After changing api/app/models.py: `alembic revision --autogenerate -m "<what>"` then `alembic upgrade head` (inside api/).
+- Run tests before committing: `cd api && pytest`, `cd analytics && pytest`.
+- Docs live in docs/. Keep docs/04-api.md and docs/11-streamlit-analytics.md in sync when adding endpoints or metrics.

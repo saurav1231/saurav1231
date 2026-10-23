@@ -4,40 +4,45 @@
 
 | Layer | Choice | Why |
 |---|---|---|
-| Frontend | **React 19 + Vite** | Fast dev server, small production build, huge ecosystem |
+| Website | **React 19 + Vite** | Fast dev server, small production build, huge ecosystem |
 | 3D | **three.js + React Three Fiber + drei** | Declarative 3D in React: the five dhams, dusk sky, mountains, diyas and the camera fly-through |
 | Routing | React Router 7 | Client-side pages |
-| Styling | Plain CSS with variables | No build plugins to learn; easy to edit in Cursor |
-| Backend | **Node.js 20+ / Express 5** | Same language as frontend, simple REST |
-| ORM | **Prisma 6** | Typed queries, migrations, Prisma Studio for browsing data |
-| Database | **MySQL 8 / MariaDB 10.6+** | What Hostinger provides on every plan; reliable for transactions |
-| Auth | JWT (Bearer token) + bcrypt | Stateless, simple |
-| Validation | Zod | Every request body/query is validated |
-| Payments | **Razorpay** (Orders API + Checkout + Webhooks) | UPI, cards, net banking, wallets; INR settlement to an Indian bank |
-| Process manager | PM2 | Keeps Node running, restarts on crash/reboot |
-| Web server | Nginx + Let's Encrypt | HTTPS, gzip, serves the static React build, proxies `/api` |
-| Hosting | **Hostinger KVM VPS** (Ubuntu 24.04) | Full control, Node + MySQL on one box, cheap |
+| Styling | Plain CSS with variables | Easy to edit in Cursor |
+| API | **Python 3.12 + FastAPI** | Fast, typed, automatic interactive docs at `/docs`, same language as the analytics |
+| Database access | **SQLAlchemy 2** (ORM) + **Alembic** (migrations) | The standard Python way to work with MySQL; schema changes are versioned |
+| Validation | **Pydantic** | Every request body and query is checked; errors come back field by field |
+| Database | **MySQL 8 / MariaDB 10.6+** | Available on every Hostinger plan; reliable transactions |
+| Login | JWT (Bearer token) + bcrypt | Stateless, simple, works for the website and a future Android app |
+| Payments | **Razorpay** (Orders API + Checkout + Webhooks) | UPI, cards, net banking, wallets; INR settlement |
+| Photos | Pillow | Resize uploads to WEBP (large + thumbnail) |
+| Admin analytics | **Streamlit + pandas + Plotly** | Interactive dashboards written in Python, no frontend work |
+| App server | Uvicorn (2 workers) under **systemd** | Restarts on crash and reboot |
+| Web server | Nginx + Let's Encrypt | HTTPS, gzip, serves the website, proxies `/api` and `/insights` |
+| Hosting | **Hostinger KVM VPS** (Ubuntu 24.04) | Full control, everything on one box, cheap |
 
 ## 2.2 High level design (HLD)
 
 ```mermaid
 flowchart LR
-  subgraph Client["Customer browser / phone"]
-    UI["React SPA<br/>3D dhams (three.js)"]
-    RZP["Razorpay Checkout<br/>(popup)"]
+  subgraph Client["Customer / admin browser"]
+    UI["React website<br/>3D dhams (three.js)"]
+    RZP["Razorpay Checkout"]
+    INS["Ayana Insights<br/>(admin only)"]
   end
 
   subgraph VPS["Hostinger VPS (Ubuntu)"]
-    NGINX["Nginx :443<br/>SSL, gzip, static files"]
-    API["Node.js / Express API :4000<br/>(PM2)"]
+    NGINX["Nginx :443<br/>SSL, static website"]
+    API["FastAPI :8000<br/>(Uvicorn, systemd)"]
+    ST["Streamlit :8501<br/>(systemd)"]
     DB[("MySQL / MariaDB :3306<br/>localhost only")]
-    JOB["Seat-hold expiry job<br/>(every 60 s, in API process)"]
+    JOB["Seat-hold expiry<br/>(every 60 s, inside the API)"]
   end
 
   RazorpayAPI["Razorpay servers"]
 
   UI -- "HTTPS /" --> NGINX
   UI -- "HTTPS /api/*" --> NGINX --> API --> DB
+  INS -- "HTTPS /insights/" --> NGINX --> ST -- "read-only user" --> DB
   JOB --> DB
   UI --> RZP --> RazorpayAPI
   API -- "create order" --> RazorpayAPI
@@ -45,11 +50,12 @@ flowchart LR
 ```
 
 **Key decisions**
-1. **One domain, one server.** `https://ayana.travel` serves the React build; `https://ayana.travel/api` is the API. No CORS headaches, one SSL certificate.
-2. **Database is never exposed to the internet.** MySQL listens on `127.0.0.1` only. Only the API talks to it.
-3. **Server is the source of truth for prices.** The browser sends *what* to book; the server calculates *how much*.
-4. **Payment confirmed twice, safely.** The checkout callback verifies the signature immediately; the webhook confirms again server-to-server in case the customer closes the tab. Both paths call the same idempotent function.
-5. **Seats are held, not oversold.** Creating a booking atomically reserves seats with a conditional SQL `UPDATE`. Unpaid bookings expire after 30 minutes and release seats.
+1. **One domain, one server.** `https://ayana.travel` serves the website, `/api` the API, `/insights` the analytics. One SSL certificate.
+2. **Database never exposed.** MySQL listens on `127.0.0.1` only. The API uses a read/write user; Insights uses a **read-only** user.
+3. **Server is the source of truth for prices.** The browser sends *what* to book; the API calculates *how much*.
+4. **Payment confirmed twice, safely.** Checkout callback verifies the signature immediately; the webhook confirms again server-to-server. Both call the same idempotent function.
+5. **Seats are held, not oversold.** One conditional SQL `UPDATE` reserves seats. Unpaid bookings expire after 30 minutes.
+6. **Same API contract as before.** The API was rewritten from Node.js to Python with identical URLs and JSON, so the website and future apps did not change.
 
 ## 2.3 Main user journeys
 
@@ -58,27 +64,27 @@ flowchart LR
 ```mermaid
 sequenceDiagram
   actor C as Customer
-  participant W as React app
-  participant A as Ayana API
+  participant W as React website
+  participant A as FastAPI
   participant D as MySQL
   participant R as Razorpay
 
   C->>W: Choose package, date, travellers
   W->>A: POST /api/bookings
-  A->>D: UPDATE Departure SET seatsBooked += n WHERE seats available
-  A->>D: INSERT Booking (PENDING, expiresAt = now + 30 min)
+  A->>D: UPDATE departures SET seats_booked += n WHERE seats available
+  A->>D: INSERT bookings (PENDING, expires_at = now + 30 min)
   A-->>W: booking
   C->>W: Click "Pay"
   W->>A: POST /api/payments/order {bookingId}
-  A->>R: orders.create(amount, receipt)
-  A->>D: INSERT Payment (CREATED, order_id)
+  A->>R: POST /v1/orders (amount, receipt)
+  A->>D: INSERT payments (CREATED, order_id)
   A-->>W: order_id, key_id, amount
   W->>R: Open Checkout(order_id)
   C->>R: Pays by UPI / card
   R-->>W: payment_id, order_id, signature
   W->>A: POST /api/payments/verify
   A->>A: HMAC_SHA256(order_id|payment_id, secret) == signature ?
-  A->>D: Payment PAID, Booking CONFIRMED (in one transaction)
+  A->>D: payment PAID, booking CONFIRMED (one transaction)
   A-->>W: confirmed booking
   R--)A: Webhook payment.captured (backup path, idempotent)
 ```
@@ -94,7 +100,7 @@ stateDiagram-v2
   EXPIRED --> CONFIRMED: late payment & seats still free
   CONFIRMED --> [*]
 ```
-If a late payment arrives and the seats are gone, the payment is marked `REFUND_PENDING` so the admin can refund it.
+If a late payment arrives and the seats are gone, the payment is marked `REFUND_PENDING` for the admin.
 
 ## 2.4 Low level design (LLD)
 
@@ -102,76 +108,70 @@ If a late payment arrives and the seats are gone, the payment is marked `REFUND_
 
 ```
 .
-├── client/                      React + Vite frontend
-│   ├── index.html
-│   ├── vite.config.js           dev proxy /api -> :4000
+├── client/                      React website (unchanged by the Python rewrite)
 │   └── src/
-│       ├── main.jsx             app bootstrap
-│       ├── App.jsx              routes + route guards
-│       ├── api.js               fetch wrapper, token storage, price/date format
-│       ├── useApi.js            data-loading hook
-│       ├── context/AuthContext.jsx
-│       ├── three/
-│       │   └── dham/            3D dham scene (lazy loaded)
-│       │       ├── dhams.js         which temples, colours, text
-│       │       ├── Temple.jsx       procedural temples + opening doors
-│       │       ├── Environment.jsx  sky, sun, mountains, diyas, lights
-│       │       └── DhamScene.jsx    layout + camera (overview / door / enter)
-│       ├── components/          Layout (nav/footer), ui (cards, tilt, pills)
-│       ├── pages/               Home, Packages, PackageDetail, Checkout,
-│       │                        MyBookings, Auth (login/register), Admin
-│       └── styles.css
-├── server/                      Express API
-│   ├── prisma/schema.prisma     database schema
-│   ├── prisma/seed.js           demo data + admin user
-│   └── src/
-│       ├── index.js             start server + expiry job
-│       ├── app.js               middleware + routes wiring
-│       ├── config.js            env vars
-│       ├── middleware/          auth (JWT, admin), error handler
-│       ├── routes/              auth, catalog, bookings, payments, admin
-│       ├── services/            bookingService (seats, confirm), paymentService (Razorpay)
-│       └── lib/                 prisma client, errors, validation, serializers
-├── deploy/                      nginx.conf, PM2 config, deploy + backup scripts
-└── docs/                        this documentation
+│       ├── api.js               every API call goes through here
+│       ├── three/dham/          3D dham scene
+│       ├── pages/               Home, Packages, PackageDetail, Checkout, MyBookings, Auth, Admin, AdminAnalytics
+│       └── demo/                in-browser fake API for the shareable preview only
+├── api/                         FastAPI
+│   ├── app/
+│   │   ├── main.py              app, middleware, routers, /uploads, seat-expiry loop
+│   │   ├── config.py            settings from .env
+│   │   ├── db.py                engine, session per request
+│   │   ├── models.py            the 9 tables
+│   │   ├── schemas.py           request bodies (Pydantic)
+│   │   ├── serializers.py       rows → JSON (camelCase)
+│   │   ├── security.py          passwords, JWT, current_user / admin_user, rate limit
+│   │   ├── errors.py            {"error", "details"} responses
+│   │   ├── routers/             auth, catalog, bookings, payments, admin
+│   │   └── services/            booking (seats, confirm), payment (Razorpay), images (Pillow)
+│   ├── alembic/versions/        database migrations
+│   ├── scripts/                 seed.py, sample_data.py, seed_data.json
+│   └── tests/                   end-to-end API tests (pytest)
+├── analytics/                   Streamlit "Ayana Insights"
+│   ├── Home.py                  overview
+│   ├── pages/                   1 Revenue growth · 2 Customer journey · 3 Churn & retention · 4 Segments · 5 Journeys & seats
+│   ├── ayana_analytics/         data.py (SQL → pandas), metrics.py (all calculations), auth.py, ui.py
+│   └── tests/                   metric definitions checked on hand-made data
+├── deploy/                      nginx.conf, ayana-api.service, ayana-insights.service, setup / deploy / backup scripts
+└── docs/
 ```
 
-### Backend modules
+### API modules
 
 | Module | Responsibility |
 |---|---|
-| `routes/auth.js` | Register, login, `me`. Passwords hashed with bcrypt (10 rounds). Returns a 7-day JWT. |
-| `routes/catalog.js` | Public: destinations, categories, package search with filters/sort/pagination, package detail, reviews. |
-| `routes/bookings.js` | Create booking, list my bookings, get one, cancel unpaid. |
-| `routes/payments.js` | `config`, `order`, `verify`, `webhook`. |
-| `routes/admin.js` | Stats, package CRUD (soft delete), departures, destinations, bookings list. Admin role required. |
-| `services/bookingService.js` | `createBooking` (atomic seat hold), `cancelPendingBooking`, `expireStaleBookings`, `markPaymentPaid` (idempotent), `refreshPackageRating`. |
-| `services/paymentService.js` | Razorpay client, order creation, checkout & webhook HMAC verification (timing-safe), mock mode. |
-| `middleware/auth.js` | `requireAuth` reads `Authorization: Bearer`, loads user; `requireAdmin`. |
-| `middleware/error.js` | Maps `HttpError` / Prisma errors to JSON `{ error, details }`. |
+| `routers/auth.py` | Register, login, `me`. bcrypt (10 rounds). 7-day JWT. Rate limited (50 / 15 min / IP). |
+| `routers/catalog.py` | Public: destinations, categories, package search (filters, sort, pagination), package detail, reviews. |
+| `routers/bookings.py` | Create, list mine, get one, cancel unpaid. |
+| `routers/payments.py` | `config`, `order`, `verify`, `webhook`. |
+| `routers/admin.py` | Stats, analytics, CSV export, package CRUD (soft delete), photos, departures, destinations, bookings. Admin role required. |
+| `services/booking.py` | `create_booking` (atomic seat hold), `cancel_pending_booking`, `expire_stale_bookings`, `mark_payment_paid` (idempotent), `refresh_package_rating`. |
+| `services/payment.py` | Razorpay order over HTTPS, checkout & webhook HMAC checks (`hmac.compare_digest`), mock mode. |
+| `services/images.py` | Validate type/size, fix orientation, save 1600 px + 640 px WEBP, safe delete. |
 
-### Security checklist (built in)
-- Helmet security headers, CORS restricted to `CLIENT_URL`, rate limit on `/api/auth` (50 req / 15 min / IP).
-- Zod validation on every input; Prisma parameterised queries (no SQL injection).
-- Prices calculated on the server; payment signatures verified with `crypto.timingSafeEqual`.
-- Webhook verified on the raw request body with a separate webhook secret.
-- Mock payments are refused when `PAYMENT_MODE=razorpay`.
-- `.env` never committed; DB bound to localhost; SSH key login on VPS (see deployment doc).
+### Security checklist
+- Security headers, CORS limited to `CLIENT_URL`, login rate limit.
+- Pydantic validation on every input; SQLAlchemy parameterised queries (no SQL injection).
+- Prices calculated on the server; payment signatures verified in constant time.
+- Webhook verified on the raw body with a separate secret.
+- Mock payments refused when `PAYMENT_MODE=razorpay`.
+- `.env` never committed; MySQL bound to localhost; analytics uses a read-only user and admin login.
 
 ### Frontend pages
 
 | Route | Page | Notes |
 |---|---|---|
-| `/` | Home | 3D dhams: hover walks to the door, click flies through it to that dham's journeys; categories, featured journeys |
-| `/packages` | Listing | Filters in the URL (shareable): search, category, destination, budget, days, sort, page |
-| `/packages/:slug` | Detail | Itinerary timeline, inclusions, reviews, sticky booking panel |
-| `/checkout/:id` | Checkout | Summary, seat-hold countdown, Razorpay popup |
-| `/my-bookings` | My bookings | Pay pending, cancel, write review |
-| `/login`, `/register` | Auth | `?next=` redirect back |
-| `/admin` | Admin | Overview / Bookings / Packages tabs |
+| `/` | Home | 3D dhams: hover walks to the door, click flies through it to that dham's journeys |
+| `/packages` | Listing | Filters in the URL (shareable) |
+| `/packages/:slug` | Detail | Photos, itinerary, reviews, booking panel |
+| `/checkout/:id` | Checkout | Seat-hold countdown, Razorpay popup |
+| `/my-bookings` | My bookings | Pay, cancel, review |
+| `/login`, `/register` | Auth | |
+| `/admin` | Admin | Overview / Analytics / Bookings / Packages + link to Ayana Insights |
 
 ### 3D scene (client/src/three/dham/)
-- Five procedural temples (Kedarnath, Kashi Vishwanath, Jagannath Puri, Golden Temple, Rameswaram) in three architectural styles (nagara, gopuram, golden), at dusk with snow peaks and diyas.
-- **Hover** (desktop): the camera glides to the temple's door and the doors swing open with light. **Click**: the camera flies through the doorway, the screen fades to gold and the dham's journeys open. **Phones**: one dham at a time with arrows.
-- Loaded with `React.lazy`, so three.js (~250 KB gzipped) never blocks the first paint of the text.
-- Full explanation: [06-code-walkthrough.md §6.4](06-code-walkthrough.md).
+Five procedural temples (Kedarnath, Kashi Vishwanath, Jagannath Puri, Golden Temple, Rameswaram) at dusk. Hover: camera
+walks to the door and the doors open. Click: fly through the doorway into that dham's journeys. Phones: one dham at a
+time. Loaded lazily so three.js never blocks the first paint. Details: [06-code-walkthrough.md §6.4](06-code-walkthrough.md).

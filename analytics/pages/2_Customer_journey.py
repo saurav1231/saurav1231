@@ -67,9 +67,8 @@ else:
     fl = flows[flows["customers"] >= min_n]
     labels = list(dict.fromkeys(list(fl["source"]) + list(fl["target"])))
     idx = {l: i for i, l in enumerate(labels)}
-    places = sorted({l.split(" · ", 1)[1] for l in labels if " · " in l})
-    color_of = {p: SERIES[i % len(SERIES)] for i, p in enumerate(places)}
-    node_colors = [color_of.get(l.split(" · ", 1)[1], MUTED) if " · " in l else MUTED for l in labels]
+    # one colour for every place (labels name them; more places than safe colours), grey for "no next trip yet"
+    node_colors = [SAFFRON if " · " in l else MUTED for l in labels]
     fig = go.Figure(go.Sankey(
         node=dict(label=labels, pad=12, thickness=12, color=node_colors),
         link=dict(source=fl["source"].map(idx), target=fl["target"].map(idx), value=fl["customers"],

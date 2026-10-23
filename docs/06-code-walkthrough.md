@@ -9,7 +9,7 @@ afterwards use it as a map when you want to change something in Cursor.
 
 ```mermaid
 flowchart LR
-  B["Browser<br/>(React website)"] -- "1. asks: GET /api/packages" --> S["Server<br/>(Node.js + Express)"]
+  B["Browser<br/>(React website)"] -- "1. asks: GET /api/packages" --> S["API<br/>(Python + FastAPI)"]
   S -- "2. SQL query" --> D[("Database<br/>(MySQL)")]
   D -- "3. rows" --> S
   S -- "4. JSON answer" --> B
@@ -18,14 +18,15 @@ flowchart LR
 
 - **Frontend (`client/`)** – what the customer sees. Written in **React** (JavaScript that builds web pages
   from small reusable pieces called *components*). It never talks to the database directly.
-- **Backend (`server/`)** – a program that runs on your server. It receives requests like
+- **Backend / API (`api/`)** – a Python program that runs on your server. It receives requests like
   "give me all packages" or "create a booking", checks them, talks to the database, and replies with **JSON**
   (plain data text such as `{ "title": "Kashi Awakening", "price": 1899900 }`).
 - **Database (MySQL)** – stores everything permanently in tables (users, packages, bookings, payments…).
+- **Analytics (`analytics/`)** – a separate Python app (Streamlit) where admins study customers and revenue.
 - **API** – the list of addresses the frontend can call on the backend, e.g. `GET /api/packages`.
   "GET" means *read*, "POST" means *create*, "PUT/PATCH" means *change*, "DELETE" means *remove*.
 
-A few words you will see everywhere:
+A few JavaScript words you will see in the website code (Python words are explained in 6.2):
 
 | Word | Meaning |
 |---|---|
@@ -43,145 +44,160 @@ A few words you will see everywhere:
 
 | File | What it does |
 |---|---|
-| `package.json` | Shortcut commands for the whole project: `npm run setup` (install both apps), `npm run dev:server`, `npm run dev:client`, `npm run build`. |
+| `package.json` | Shortcut commands for the website: `npm run dev:client`, `npm run build`, `npm run build:demo`. |
 | `README.md` | Quick start. |
-| `.gitignore` | Files Git must never upload: `node_modules` (downloaded libraries), `.env` (passwords), `dist` (build output), `logs`. |
+| `.gitignore` | Files Git must never upload: `node_modules` and `.venv` (downloaded libraries), `.env` (passwords), `dist` (build output), `uploads`, `logs`. |
 | `.cursorrules` | Instructions Cursor's AI reads before editing your code, so it follows the same conventions. |
-| `docker-compose.yml` | Starts a MySQL database on your laptop with one command (`docker compose up -d`) if you don't want to install MySQL. |
-| `.github/workflows/deploy.yml` | GitHub Actions: on every push to `main`, it checks the code builds, then logs into your Hostinger VPS and runs `deploy/deploy.sh`. Explained in [guide 07](07-cursor-github-hostinger.md). |
+| `docker-compose.yml` | Starts MySQL on your laptop with `docker compose up -d`. `deploy/mysql-init.sql` also lets the tests create their own `ayana_test` database. |
+| `.github/workflows/deploy.yml` | GitHub Actions: on every push it runs the API tests (with a real MySQL), the analytics tests and the website build; on `main` it then logs into your VPS and runs `deploy/deploy.sh`. Explained in [guide 07](07-cursor-github-hostinger.md). |
 
 ---
 
-## 6.2 Backend – `server/`
+## 6.2 API (backend) – `api/` · Python + FastAPI
 
-### `server/package.json`
-Lists the libraries the API uses and its commands:
+### Python words you will see
+
+| Word | Meaning |
+|---|---|
+| `def name(...):` | a function |
+| `async def` / `await` | a function that waits for something slow (network, file upload) without blocking others |
+| `class X(Base):` | a blueprint – here, one database table or one kind of request |
+| `@router.get("/packages")` | a *decorator*: "run the function below when someone calls GET /api/packages" |
+| `Depends(current_user)` | FastAPI fills this argument for you – e.g. "the logged-in user", or "a database session" |
+| `str \| None` | a type hint: a text value, or nothing |
+| `with SessionLocal() as db:` | open a database session and close it automatically afterwards |
+| virtual environment (`.venv`) | a private folder holding this project's Python libraries |
+
+### `api/requirements.txt`
+The Python libraries, each pinned to an exact version so every computer installs the same thing:
 
 | Library | Why |
 |---|---|
-| `express` | the web server framework – receives requests, sends responses |
-| `@prisma/client` + `prisma` | talk to MySQL with JavaScript instead of raw SQL; also creates tables (migrations) |
-| `bcryptjs` | scrambles passwords one-way before saving (we never store real passwords) |
-| `jsonwebtoken` | creates the login "token" (a signed pass the browser shows on each request) |
-| `zod` | checks that incoming data is valid (email looks like an email, travellers ≥ 1…) |
-| `razorpay` | creates payment orders with Razorpay |
-| `multer` + `sharp` | receive uploaded photos and resize them |
-| `helmet`, `cors`, `express-rate-limit` | security headers, which websites may call the API, limit login attempts |
-| `morgan` | prints one log line per request |
-| `dotenv` | reads settings from the `.env` file |
+| `fastapi` | the web framework: routes, validation, automatic docs at `/docs` |
+| `uvicorn` | the server program that runs FastAPI |
+| `SQLAlchemy` + `PyMySQL` | talk to MySQL with Python classes instead of hand-written SQL |
+| `alembic` | database migrations (create and change tables safely) |
+| `pydantic`, `pydantic-settings`, `email-validator` | check incoming data; read settings from `.env` |
+| `bcrypt`, `PyJWT` | scramble passwords one-way; create/check login tokens |
+| `httpx` | call Razorpay's API |
+| `pillow`, `python-multipart` | receive photo uploads and resize them |
+| `pytest` | run the tests |
 
-Commands: `npm run dev` (start with auto-restart), `npm run db:setup` (create tables + demo data),
-`npm run db:sample` (fake bookings for analytics, development only), `npm run db:studio` (browse data in a web page).
+### `api/.env.example` → copy to `api/.env`
+All settings and secrets: `DATABASE_URL`, `JWT_SECRET`, `PAYMENT_MODE` (`mock` / `razorpay`), Razorpay keys,
+`UPLOAD_DIR`, `BOOKING_HOLD_MINUTES`, `CLIENT_URL`, first admin email/password. The code contains no passwords.
 
-### `server/.env.example` → copy to `server/.env`
-All settings and secrets in one place, so the code itself contains no passwords:
-`DATABASE_URL` (where MySQL is), `JWT_SECRET` (key that signs login tokens), `PAYMENT_MODE` (`mock` or `razorpay`),
-Razorpay keys, `UPLOAD_DIR` (photo folder), `BOOKING_HOLD_MINUTES` (30), admin email/password for the first seed.
+### `api/app/main.py` – the starting point
+1. Creates the FastAPI `app`, registers error handlers, CORS (only your website may call it) and security headers.
+2. Mounts the routers under `/api` (auth, catalog, bookings, payments, admin) and the Razorpay webhook.
+3. Serves uploaded photos at `/uploads`.
+4. On start-up runs `expiry_loop`: every 60 seconds, `expire_stale_bookings()` frees seats of unpaid bookings older than 30 minutes.
+5. Optional `SERVE_CLIENT=true`: also serves the built website (for hosting without Nginx).
 
-### `server/prisma/schema.prisma` – the database design
-Each `model` becomes a table. Read it like this:
+Run it with `uvicorn app.main:app --reload --port 8000`; open `http://localhost:8000/docs` to try every endpoint.
 
-```prisma
-model Booking {
-  id          String  @id @default(cuid())   // unique id, generated automatically
-  bookingRef  String  @unique                // AYN-7K2P9Q, shown to customers
-  userId      String
-  user        User    @relation(fields: [userId], references: [id])  // link to the customer
-  amount      Int                            // paise
-  status      BookingStatus @default(PENDING)
-  ...
-}
+### `api/app/config.py`
+`Settings` reads `.env`, applies defaults and refuses to start if something essential is missing (e.g. `JWT_SECRET`,
+or Razorpay keys when `PAYMENT_MODE=razorpay`). `get_settings()` returns one shared copy.
+
+### `api/app/db.py`
+Creates the database **engine** (connection pool) and `get_db()`, which gives each request its own session and always
+closes it. `Base` is the parent class of all tables.
+
+### `api/app/models.py` – the database tables
+Each class is a table; each `mapped_column` is a column:
+
+```python
+class Booking(Base):
+    __tablename__ = "bookings"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    booking_ref: Mapped[str] = mapped_column(String(20), unique=True)   # AYN-7K2P9Q
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    amount: Mapped[int] = mapped_column(Integer)                        # paise
+    status: Mapped[str] = mapped_column(String(20), default=PENDING)
+    user: Mapped[User] = relationship(back_populates="bookings")        # booking.user gives the customer
+```
+Tables: `users`, `destinations`, `packages`, `package_images`, `itinerary_days`, `departures`, `bookings`, `payments`,
+`reviews` ([diagram](03-database.md)). Status words (`PENDING`, `CONFIRMED`, `PAID`…) are constants at the top.
+
+### `api/alembic/` – migrations
+`versions/0001_initial_tables.py` creates every table. After you change `models.py`:
+`alembic revision --autogenerate -m "what changed"` writes a new file; `alembic upgrade head` applies it (the deploy
+script does this on the server automatically).
+
+### `api/app/schemas.py` – what requests must look like
+Pydantic classes such as `BookingIn` (package, departure, travellers 1–50, contact name ≥ 2 letters, phone 7–20
+characters). The website sends `contactPhone` (camelCase); Python sees `contact_phone`. Invalid input is rejected
+before your code runs, with a message per field.
+
+### `api/app/serializers.py` – what answers look like
+Turns rows into the exact JSON the website expects (`pricePerPerson`, ISO dates like `2026-11-06T00:00:00.000Z`).
+`unit_price` picks the date's special price if set, else the package price.
+
+### `api/app/security.py`
+- `hash_password` / `check_password` – bcrypt.
+- `create_token(user)` – JWT with the user id and role, valid 7 days.
+- `current_user` – reads `Authorization: Bearer <token>`, checks it, loads the user, else 401.
+- `admin_user` – only `role = ADMIN`, else 403.
+- `auth_rate_limit` – at most 50 login/register attempts per IP per 15 minutes.
+
+### `api/app/errors.py`
+`HttpError` plus shortcuts (`bad_request` 400, `unauthorized` 401, `forbidden` 403, `not_found` 404, `conflict` 409).
+Handlers turn every error – including validation errors and duplicate entries – into `{"error": "...", "details": {...}}`.
+Unexpected errors are logged and the customer sees a polite message (never internal details).
+
+### `api/app/routers/` – the endpoints
+Each function is one endpoint. The pattern everywhere:
+
+```python
+@router.post("", status_code=201)
+def create(data: BookingIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    booking = create_booking(db, user, data)          # the business rule lives in services/
+    return {"booking": booking_out(...)}               # FastAPI turns the dict into JSON
 ```
 
-Tables: `User`, `Destination`, `Package`, `PackageImage`, `ItineraryDay`, `Departure`, `Booking`, `Payment`, `Review`.
-Full diagram in [03-database.md](03-database.md). When you change this file, run `npx prisma migrate dev -n what_changed`;
-Prisma writes the SQL into `prisma/migrations/` and updates the database.
-
-### `server/prisma/seed.js`
-Fills an empty database with 12 destinations, 11 packages (with itineraries and 4 departure dates each) and the admin
-user. It uses `upsert` (update if it exists, otherwise insert), so running it twice is safe.
-
-### `server/prisma/sample-bookings.js`
-Creates 20 fake customers and ~190 bookings spread over the last 12 months so the Analytics tab has data while you
-build. It refuses to run when `NODE_ENV=production`.
-
-### `server/src/index.js` – the starting point
-1. Builds the app (`createApp()`), starts listening on port 4000.
-2. Every 60 seconds runs `expireStaleBookings()` – unpaid bookings older than 30 minutes become `EXPIRED` and their seats are freed.
-3. On shutdown (Ctrl+C or PM2 restart) closes the database connection cleanly.
-
-### `server/src/app.js` – wiring
-Order matters here; each `app.use` is a layer every request passes through:
-1. `helmet` (security headers) → `cors` (only your website may call the API) → `morgan` (logging).
-2. The **Razorpay webhook** route is registered *before* the JSON parser because the signature must be checked on the exact raw bytes Razorpay sent.
-3. `express.json()` turns request bodies into JavaScript objects.
-4. Rate limit on `/api/auth` (50 attempts / 15 min per IP) against password guessing.
-5. `/uploads` serves photo files from disk.
-6. Route files: `/api/auth`, `/api` (catalog), `/api/bookings`, `/api/payments`, `/api/admin`.
-7. Optional `SERVE_CLIENT=true`: the API also serves the built website (for Hostinger plans without Nginx).
-8. `errorHandler` last – turns any thrown error into a clean JSON message.
-
-### `server/src/config.js`
-Reads `.env`, applies defaults, and stops the server at startup if something essential is missing
-(e.g. `JWT_SECRET`, or Razorpay keys when `PAYMENT_MODE=razorpay`). Warns loudly if mock payments are on in production.
-
-### `server/src/lib/` – small helpers
-| File | What it does |
+| File | Endpoints |
 |---|---|
-| `prisma.js` | creates the single database connection everyone shares |
-| `errors.js` | `HttpError` plus shortcuts: `badRequest` (400), `unauthorized` (401), `forbidden` (403), `notFound` (404), `conflict` (409) |
-| `validate.js` | `validate(schema, data)` – runs a zod check, throws a 400 with the field problems if it fails |
-| `serialize.js` | shapes rows for the API: removes `passwordHash` from users, calculates `seatsLeft` and the per-date price |
+| `auth.py` | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` |
+| `catalog.py` | `GET /destinations` (+ counts for the dham chips), `GET /categories`, `GET /packages` (search, filters, sort, pages), `GET /packages/{slug}` (photos, itinerary, future dates, reviews), `POST /packages/{slug}/reviews` (only after a confirmed booking) |
+| `bookings.py` | `POST /bookings`, `GET /bookings/me`, `GET /bookings/{id}` (owner or admin), `POST /bookings/{id}/cancel` |
+| `payments.py` | `GET /payments/config`, `POST /payments/order`, `POST /payments/verify`, the webhook |
+| `admin.py` | `GET /admin/stats`, `GET /admin/analytics`, `GET /admin/export/bookings.csv`, package create/update/hide, photo upload/reorder/rename/delete, departures, destinations, bookings list |
 
-### `server/src/middleware/`
-- **`auth.js`**
-  - `signToken(user)` → a JWT containing the user id and role, valid 7 days.
-  - `requireAuth` → reads `Authorization: Bearer <token>`, verifies the signature, loads the user, else replies 401.
-  - `requireAdmin` → only lets `role = ADMIN` continue, else 403.
-- **`error.js`** → converts errors to JSON: our `HttpError`s keep their status; duplicate values (Prisma code P2002) → 409; "not found" (P2025) → 404; photo too large → 400; anything unexpected → logged and a generic 500 (never leaks internals).
+### `api/app/services/` – the important business rules
+**`booking.py`**
+- `hold_seats` – one SQL statement: `UPDATE departures SET seats_booked = seats_booked + :n WHERE … AND seats_booked + :n <= seats_total`.
+  The database checks and updates in one step, so two people can never take the last seat.
+- `create_booking` – finds package and date, **calculates the price on the server**, holds seats, saves a PENDING
+  booking expiring in 30 minutes – all in one transaction.
+- `cancel_pending_booking`, `expire_stale_bookings` – mark unpaid bookings CANCELLED / EXPIRED and give seats back.
+- `mark_payment_paid` – used by both `/verify` and the webhook; locks the payment row; if already handled does nothing.
+  Expired booking but seats still free → confirmed anyway; sold out meanwhile → payment `REFUND_PENDING`.
+- `refresh_package_rating` – recalculates the average stars.
 
-### `server/src/routes/` – the API endpoints
-Each file is a mini-router. Pattern used everywhere:
+**`payment.py`**
+- `create_gateway_order` – mock order id, or a real `POST https://api.razorpay.com/v1/orders`.
+- `verify_checkout_signature` – Razorpay signs `order_id|payment_id` with your secret (HMAC-SHA256); we compute the
+  same and compare with `hmac.compare_digest`. A fake payment cannot match.
+- `verify_webhook_signature` – same for webhooks, using the webhook secret on the raw body.
 
-```js
-router.post('/', async (req, res) => {
-  const data = validate(createSchema, req.body);   // 1. check input
-  const booking = await createBooking(req.user, data); // 2. do the work
-  res.status(201).json({ booking });               // 3. reply
-});
-```
+**`images.py`**
+- `read_uploads` – up to 12 files, JPG/PNG/WEBP/AVIF, 15 MB each.
+- `save_package_image` – Pillow turns the photo the right way up (phone photos), saves a 1600 px and a 640 px WEBP in
+  `uploads/packages/<id>/`. A 6 MB photo becomes ~200 KB.
+- `delete_image_files` – removes both files, never outside the uploads folder.
 
-| File | Endpoints and logic |
-|---|---|
-| `auth.js` | `POST /register` (checks email unused, hashes password, returns token), `POST /login` (compares hash), `GET /me` |
-| `catalog.js` | Public pages: `GET /destinations` (+ package counts, used by the dham chips), `GET /categories`, `GET /packages` (search, filters, sort, pagination – the filter object is built step by step from the query string), `GET /packages/:slug` (detail with photos, itinerary, future departures, reviews), `POST /packages/:slug/reviews` (only if you have a CONFIRMED booking; then recalculates the average rating) |
-| `bookings.js` | All need login. `POST /` create, `GET /me` my bookings, `GET /:id` one booking (owner or admin only), `POST /:id/cancel` |
-| `payments.js` | `GET /config`, `POST /order` (creates a Razorpay order for a PENDING booking, saves a `Payment` row), `POST /verify` (checks Razorpay's signature, then confirms), `razorpayWebhook` (Razorpay calls this directly; signature checked; confirms even if the customer closed the browser) |
-| `admin.js` | Admin only. `GET /stats`, `GET /analytics` (SQL group-by queries per month, package, destination, category; booking outcomes; repeat customers; seats filled), `GET /export/bookings.csv`, package create/update/hide, photo upload/reorder/delete, departures, destinations, bookings list |
+### `api/scripts/`
+- `seed.py` – reads `seed_data.json` (12 destinations, 11 journeys with itineraries), adds 4 future dates per journey
+  and the admin from `.env`. Safe to run again.
+- `sample_data.py` – about 700 sample customers over two years: seasonality, growth, repeat pilgrims who move from one
+  dham to the next, people who stop coming and people who come back, reviews. Emails end in `@example.com`.
+  Refuses to run in production.
 
-### `server/src/services/` – the important business rules
-**`bookingService.js`**
-- `holdSeats` – one SQL statement: `UPDATE Departure SET seatsBooked = seatsBooked + n WHERE … AND seatsBooked + n <= seatsTotal`.
-  The database does the check and the update in one step, so two people can never grab the last seat at the same time.
-- `createBooking` – finds package and date, **calculates the price on the server** (never trusts the browser),
-  holds seats, creates a `PENDING` booking that expires in 30 minutes. All inside a transaction (all-or-nothing).
-- `cancelPendingBooking` / `expireStaleBookings` – mark unpaid bookings `CANCELLED` / `EXPIRED` and give seats back.
-- `markPaymentPaid` – called by both `/verify` and the webhook. If already handled, does nothing (safe to call twice).
-  Normal case: booking → `CONFIRMED`, payment → `PAID`. If the booking had expired, it tries to re-hold seats;
-  if the date sold out meanwhile, the payment is marked `REFUND_PENDING` for the admin.
-- `refreshPackageRating` – recalculates average stars after a review.
-
-**`paymentService.js`**
-- In `mock` mode creates fake order ids; in `razorpay` mode calls `razorpay.orders.create`.
-- `verifyCheckoutSignature` – Razorpay signs `order_id|payment_id` with your secret key (HMAC-SHA256). We compute the same
-  and compare using a timing-safe comparison. If someone fakes a payment, the signatures won't match.
-- `verifyWebhookSignature` – same idea for webhooks, using the webhook secret.
-
-**`imageService.js`**
-- `uploadImages` – accepts up to 12 JPG/PNG/WEBP/AVIF files, 15 MB each, held in memory briefly.
-- `savePackageImage` – `sharp` rotates the photo the right way up (phone photos), then saves a 1600 px and a 640 px
-  WEBP copy in `uploads/packages/<packageId>/`. A 6 MB phone photo becomes ~200 KB, so pages load fast.
-- `deleteImageFiles` – removes both files when a photo is deleted.
+### `api/tests/`
+`conftest.py` builds a fresh `ayana_test` database. `test_api.py` checks the whole flow through real HTTP calls:
+catalog, login errors, booking + mock payment, seat limits and cancel, expiry, Razorpay signatures and webhook replay,
+admin (stats, analytics, CSV, packages, photos). Run `pytest` inside `api/`.
 
 ---
 
@@ -190,10 +206,10 @@ router.post('/', async (req, res) => {
 ### `client/index.html`, `vite.config.js`, `package.json`
 - `index.html` – the single HTML page; React fills `<div id="root">`. Also loads the two fonts.
 - `vite.config.js` – **Vite** is the tool that runs the dev server and builds the final files. In development it forwards
-  `/api` and `/uploads` to `localhost:4000`, so the website and API feel like one site.
+  `/api` and `/uploads` to the FastAPI server on `localhost:8000`, so the website and API feel like one site.
 - `package.json` – React, React Router (pages), three.js + React Three Fiber + drei (3D).
   Commands: `npm run dev`, `npm run build` (makes `dist/` for the server), `npm run build:demo` (the shareable preview).
-- `.env.example` – `VITE_API_URL`, only needed if the API is on a different domain. `.env.demo` turns on preview mode.
+- `.env.example` – `VITE_API_URL` (only if the API is on another domain) and `VITE_INSIGHTS_URL` (where the admin's Insights button points). `.env.demo` turns on preview mode.
 
 ### `client/src/main.jsx`
 Starts React: wraps the app in the **Router** (which page to show for which URL) and the **AuthProvider**
@@ -289,21 +305,50 @@ flowchart TD
 
 | File | What it does |
 |---|---|
-| `setup-vps.sh` | Run once on a fresh VPS as root: installs Nginx, MariaDB, Node 22, PM2, firewall; creates the database and the `ayana` user; prints your `DATABASE_URL`. |
-| `deploy.sh` | Run for every release: `git pull`, install API, apply database migrations, build the website, restart the API with PM2. GitHub Actions runs this automatically. |
-| `ecosystem.config.cjs` | Tells PM2 how to run the API (name `ayana-api`, production mode, restart if memory > 400 MB, log files). |
-| `nginx.conf` | Nginx site: serves the built website, sends `/api/` to Node, serves `/uploads/` photos from disk, caches assets, allows 60 MB uploads. Certbot adds HTTPS to it. |
-| `backup-db.sh` | Daily: dumps the database and zips the photos folder into `~/backups`, deletes backups older than 14 days. |
+| `setup-vps.sh` | Run once on a fresh VPS as root: installs Nginx, MariaDB, Python, Node 22 (to build the website), firewall; creates the database, the `ayana` (read/write) and `ayana_read` (read-only) users and the `ayana` system user; prints both database addresses. |
+| `deploy.sh` | Every release: `git pull`, Python packages for API and Insights, `alembic upgrade head`, website build, restart both services. GitHub Actions runs it automatically. |
+| `ayana-api.service` | systemd service: runs Uvicorn with 2 workers on `127.0.0.1:8000`, restarts it if it stops, starts it after a reboot. |
+| `ayana-insights.service` | systemd service: runs Streamlit on `127.0.0.1:8501` under the path `/insights`. |
+| `nginx.conf` | Nginx site: serves the website, sends `/api/` to FastAPI and `/insights/` to Streamlit (with WebSocket support), serves `/uploads/` photos from disk, caches assets, allows 60 MB uploads. Certbot adds HTTPS. |
+| `backup-db.sh` | Nightly: dumps the database and zips `api/uploads` into `~/backups`, keeps 14 days. |
+| `mysql-init.sql` | Local Docker only: lets the app user create the test database. |
 
 ---
 
 ## 6.6 What happens when a customer books (all files together)
 
-1. `PackageDetail.jsx` → `api('/bookings', POST)` → `routes/bookings.js` → `validate` → `bookingService.createBooking`
-   → `holdSeats` SQL → `Booking` row (PENDING).
-2. Browser opens `/checkout/:id` → `Checkout.jsx` → **Pay** → `POST /payments/order` → `paymentService.createGatewayOrder`
-   → Razorpay → `Payment` row (CREATED).
+1. `PackageDetail.jsx` → `api('/bookings', POST)` → `routers/bookings.py` → `BookingIn` checks the input →
+   `services/booking.create_booking` → `hold_seats` SQL → `bookings` row (PENDING).
+2. Browser opens `/checkout/:id` → `Checkout.jsx` → **Pay** → `POST /payments/order` → `services/payment.create_gateway_order`
+   → Razorpay → `payments` row (CREATED).
 3. Razorpay popup → customer pays by UPI → `handler` → `POST /payments/verify` → signature check
-   → `markPaymentPaid` → Booking CONFIRMED, Payment PAID.
+   → `mark_payment_paid` → booking CONFIRMED, payment PAID.
 4. Razorpay also calls `/api/payments/webhook` → same function → nothing to do (already confirmed).
-5. Admin sees it instantly in **Admin → Overview / Bookings / Analytics**.
+5. Admin sees it in **Admin → Overview / Bookings / Analytics** at once, and in **Ayana Insights** within 10 minutes
+   (or immediately with *Refresh data*).
+
+---
+
+## 6.7 Ayana Insights – `analytics/` · Python + Streamlit
+
+**Streamlit** turns a Python script into a web page: every `st.something(...)` line draws something (a title, a number,
+a chart, a table). When the admin changes a filter, the script runs again from the top with the new values.
+
+| File | What it does |
+|---|---|
+| `requirements.txt` | streamlit, pandas (tables of data), plotly (charts), SQLAlchemy + PyMySQL, bcrypt, python-dotenv, pytest |
+| `.env.example` → `.env` | `ANALYTICS_DATABASE_URL` – the **read-only** database user. If empty, uses `api/.env` |
+| `.streamlit/config.toml` | Dark theme in Ayana colours; no usage statistics sent anywhere |
+| `Home.py` | The **Overview** page: headline numbers vs the previous period, plain-language highlights, revenue trend, customers by status, links to the other pages |
+| `pages/1_Revenue_growth.py` | Revenue per period with 3-period average, growth vs previous and vs last year, **growth accounting** (new / won back / spent more / spent less / did not travel), new vs returning revenue, rebounds after a dip, revenue by destination |
+| `pages/2_Customer_journey.py` | Funnel from sign-up to 3+ trips, what happens to bookings, second chances, **flow diagram of which dham pilgrims visit next**, journey type to journey type heatmap, timing histograms, sign-ups vs first trips |
+| `pages/3_Churn_and_retention.py` | Status counts, churn rate per period, lost vs won back, **cohort heatmap** (do first-time pilgrims come back), **who to call this week** with CSV download |
+| `pages/4_Customer_segments.py` | RFM scores and segments with suggested actions and downloadable lists |
+| `pages/5_Journeys_and_seats.py` | Revenue by journey, bookings not completed, how full departures were, upcoming departures |
+| `ayana_analytics/data.py` | Runs five SQL queries and returns pandas tables: customers, bookings, **orders** (= paid bookings with who/what/when), departures, reviews. Cached for 10 minutes; *Refresh data* clears it |
+| `ayana_analytics/metrics.py` | **Every calculation**, as plain functions (no Streamlit inside), so they can be tested: `revenue_by_period`, `growth_accounting`, `new_vs_returning`, `customer_table`, `churn_by_period`, `cohort_repeat`, `rfm`, `funnel`, `destination_flows`, `transitions`, `timing`, `retry_after_failure`, `occupancy`, `package_health` |
+| `ayana_analytics/auth.py` | `require_admin()` – login form checked against the `users` table (role ADMIN, bcrypt). Every page calls it first |
+| `ayana_analytics/ui.py` | Shared look: chart colours (a tested colour-blind-safe palette; green/amber/red only for customer status), ₹ formatting in lakh/crore, chart styling, and the sidebar **filters** (period, group by month/quarter/year, churn window, destinations, journey types) that stay set when you change page |
+| `tests/test_metrics.py` | Small hand-made data with known answers, checking growth, growth accounting, statuses, churn, cohorts, segments, flows and the funnel |
+
+The exact definition of every number is in **[11-streamlit-analytics.md](11-streamlit-analytics.md)**.
